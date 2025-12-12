@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import DoctorLayout from '../../layouts/DoctorLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { toast } from 'react-hot-toast';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function DoctorProfilePage() {
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const [form, setForm] = useState({
     phone: '',
@@ -16,17 +16,17 @@ export default function DoctorProfilePage() {
     confirmPassword: '',
   });
 
-  const fetchProfile = async () => {
+ const fetchProfile = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/doctor/profile');
+      const res = await api.get(ENDPOINTS.DOCTOR.PROFILE);
       setDoctor(res.data);
       setForm((prev) => ({
         ...prev,
         phone: res.data.phone || '',
       }));
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load profile');
+      toast.error(err.response?.data?.error || 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -42,38 +42,44 @@ export default function DoctorProfilePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
 
     if (form.password && form.password !== form.confirmPassword) {
-      setError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
+    const payload = { phone: form.phone };
+    if (form.password) payload.password = form.password;
+
     try {
       setSaving(true);
-      const payload = {
-        phone: form.phone,
-      };
-      if (form.password) payload.password = form.password;
 
-      await api.patch('/doctor/profile', payload);
-      
-      setSuccess('Profile updated successfully');
+      await toast.promise(
+        api.patch(ENDPOINTS.DOCTOR.PROFILE, payload),
+        {
+          loading: 'Saving your profile...',
+          success: 'Profile updated successfully',
+          error: (err) =>
+            err.response?.data?.error || 'Failed to update profile',
+        }
+      );
+
       setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
-      fetchProfile(); // Refresh data
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update profile');
+      fetchProfile();
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return (
-    <DoctorLayout>
-      <div className="flex justify-center py-20"><Loader /></div>
-    </DoctorLayout>
-  );
+  if (loading) {
+    return (
+      <DoctorLayout>
+        <div className="flex justify-center py-20">
+          <Loader />
+        </div>
+      </DoctorLayout>
+    );
+  }
 
   return (
     <DoctorLayout>
@@ -97,17 +103,6 @@ export default function DoctorProfilePage() {
 
           {/* Edit Form */}
           <form onSubmit={handleSubmit} className="p-8 space-y-6">
-            {error && (
-              <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm font-medium">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="p-4 bg-green-50 text-green-700 rounded-xl text-sm font-medium">
-                {success}
-              </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

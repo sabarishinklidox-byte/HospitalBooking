@@ -1,8 +1,24 @@
+// src/features/clinicAdmin/DoctorsPage.jsx
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
 import Modal from '../../components/Modal.jsx';
+import toast from 'react-hot-toast';
+import { ENDPOINTS } from '../../lib/endpoints';
+
+const SPECIALITIES_ENUM = [
+  { label: 'Dentist', value: 'DENTIST' },
+  { label: 'Cardiologist', value: 'CARDIOLOGIST' },
+  { label: 'Neurologist', value: 'NEUROLOGIST' },
+  { label: 'Orthopedic', value: 'ORTHOPEDIC' },
+  { label: 'Gynecologist', value: 'GYNECOLOGIST' },
+  { label: 'Pediatrician', value: 'PEDIATRICIAN' },
+  { label: 'Dermatologist', value: 'DERMATOLOGIST' },
+  { label: 'Ophthalmologist', value: 'OPHTHALMOLOGIST' },
+  { label: 'General Physician', value: 'GENERAL_PHYSICIAN' },
+  { label: 'Other', value: 'OTHER' },
+];
 
 const INITIAL_FORM = {
   name: '',
@@ -14,24 +30,25 @@ const INITIAL_FORM = {
   password: '',
 };
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDoctorId, setEditingDoctorId] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [avatarFile, setAvatarFile] = useState(null);
 
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      setError('');
-      const res = await api.get('/admin/doctors');
+      const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
       setDoctors(res.data || []);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load doctors');
+      toast.error(err.response?.data?.error || 'Failed to load doctors');
     } finally {
       setLoading(false);
     }
@@ -44,6 +61,7 @@ export default function DoctorsPage() {
   const openCreateModal = () => {
     setEditingDoctorId(null);
     setForm(INITIAL_FORM);
+    setAvatarFile(null);
     setModalOpen(true);
   };
 
@@ -58,6 +76,7 @@ export default function DoctorsPage() {
       avatar: doc.avatar || '',
       password: '',
     });
+    setAvatarFile(null);
     setModalOpen(true);
   };
 
@@ -66,201 +85,235 @@ export default function DoctorsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
-    try {
-      setSaving(true);
+    const formData = new FormData();
+    formData.append('name', form.name);
+    if (form.email) formData.append('email', form.email);
+    if (form.phone) formData.append('phone', form.phone);
+    formData.append('speciality', form.speciality);
+    formData.append('experience', form.experience);
 
-      if (editingDoctorId) {
-        const payload = {
-          name: form.name,
-          email: form.email || undefined,
-          phone: form.phone || undefined,
-          speciality: form.speciality,
-          experience: form.experience,
-          avatar: form.avatar || undefined,
-          password: form.password || undefined,
-        };
-        await api.put(`/admin/doctors/${editingDoctorId}`, payload);
-      } else {
-        await api.post('/admin/doctors', {
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          speciality: form.speciality,
-          experience: form.experience,
-          avatar: form.avatar || undefined,
-          password: form.password,
-        });
-      }
-
-      setModalOpen(false);
-      setForm(INITIAL_FORM);
-      setEditingDoctorId(null);
-      fetchDoctors();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save doctor');
-    } finally {
-      setSaving(false);
+    if (avatarFile) {
+      formData.append('avatar', avatarFile);
+    } else if (editingDoctorId && form.avatar) {
+      formData.append('avatar', form.avatar);
     }
+
+    if (form.password) {
+      formData.append('password', form.password);
+    }
+
+    const config = {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    };
+
+    const promise = editingDoctorId
+      ? api.put(ENDPOINTS.ADMIN.DOCTOR_BY_ID(editingDoctorId), formData, config)
+      : api.post(ENDPOINTS.ADMIN.DOCTORS, formData, config);
+
+    await toast.promise(promise, {
+      loading: editingDoctorId ? 'Updating doctor...' : 'Creating doctor...',
+      success: () => {
+        setModalOpen(false);
+        setForm(INITIAL_FORM);
+        setAvatarFile(null);
+        setEditingDoctorId(null);
+        fetchDoctors();
+        return editingDoctorId ? 'Doctor updated!' : 'Doctor created!';
+      },
+      error: (err) => err.response?.data?.error || 'Failed to save doctor',
+    });
   };
 
-  const handleToggleActive = async (id) => {
-    try {
-      await api.patch(`/admin/doctors/${id}/toggle`);
-      fetchDoctors();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to update doctor status');
+  const handleToggleActive = async (id, isActive) => {
+    await toast.promise(api.patch(ENDPOINTS.ADMIN.DOCTOR_TOGGLE_ACTIVE(id)), {
+      loading: isActive ? 'Deactivating...' : 'Activating...',
+      success: () => {
+        fetchDoctors();
+        return isActive ? 'Doctor deactivated' : 'Doctor activated';
+      },
+      error: 'Failed to update doctor status',
+    });
+  };
+
+  const getSpecialityLabel = (val) => {
+    const found = SPECIALITIES_ENUM.find((s) => s.value === val);
+    return found ? found.label : val;
+  };
+
+  const renderStatusBadge = (isActive) => {
+    if (isActive) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Active
+        </span>
+      );
     }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+        Inactive
+      </span>
+    );
   };
 
   return (
     <ClinicAdminLayout>
-      <div className="w-full px-3 sm:px-6">
-        <h1
-          className="text-2xl sm:text-3xl font-bold mb-6 tracking-tight text-center sm:text-left"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          Doctors
-        </h1>
-
-        {error && (
-          <p className="mb-4 text-sm text-red-600 text-center sm:text-left">
-            {error}
-          </p>
-        )}
-
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-sm text-gray-600">
-            Total doctors: <span className="font-semibold">{doctors.length}</span>
-          </p>
+      <div className="w-full px-3 sm:px-6 py-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+          <div>
+            <h1
+              className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              <span>👨‍⚕️</span>
+              <span>Doctors</span>
+            </h1>
+            <p className="text-xs text-gray-500 mt-1">
+              Manage your clinic’s doctors, specialties, and availability.
+            </p>
+          </div>
           <button
             onClick={openCreateModal}
-            className="btn-primary px-4 py-2 text-sm rounded-lg"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm text-white"
             style={{ backgroundColor: 'var(--color-action)' }}
           >
-            + Add Doctor
+            <span className="text-lg leading-none">＋</span>
+            <span>Add Doctor</span>
           </button>
         </div>
 
+        <div className="flex items-center justify-between mb-4 text-sm text-gray-600">
+          <p>
+            Total doctors:{' '}
+            <span className="font-semibold text-gray-900">
+              {doctors.length}
+            </span>
+          </p>
+        </div>
+
         {loading ? (
-          <Loader />
+          <div className="py-16 flex justify-center">
+            <Loader />
+          </div>
         ) : doctors.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl shadow">
-            <p className="text-sm text-gray-500 mb-4">No doctors added yet.</p>
+          <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-dashed border-gray-200">
+            <p className="text-sm text-gray-500 mb-4">
+              No doctors added yet for this clinic.
+            </p>
             <button
               onClick={openCreateModal}
-              className="btn-primary px-6 py-2.5 rounded-lg"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm"
               style={{ backgroundColor: 'var(--color-primary)' }}
             >
-              + Add First Doctor
+              <span className="text-lg leading-none">＋</span>
+              <span>Add First Doctor</span>
             </button>
           </div>
         ) : (
-          <>
-            {/* FULLY RESPONSIVE SECTION STARTS HERE */}
-            <div className="bg-white rounded-xl shadow">
-
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Speciality</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Experience</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Phone</th>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-700">Actions</th>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50/80 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                      Speciality
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                      Experience
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                      Phone
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-700">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {doctors.map((doc) => (
+                    <tr
+                      key={doc.id}
+                      className="hover:bg-gray-50/80 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-blue-700 border border-blue-100 overflow-hidden">
+                            {doc.avatar ? (
+                              <img
+                                src={
+                                  doc.avatar.startsWith('http')
+                                    ? doc.avatar
+                                    : `${API_BASE_URL}${doc.avatar}`
+                                }
+                                alt={doc.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <span>
+                                {doc.name
+                                  ? doc.name.charAt(0).toUpperCase()
+                                  : '?'}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {doc.name}
+                            </p>
+                            {doc.userEmail && (
+                              <p className="text-xs text-gray-400">
+                                {doc.userEmail}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {getSpecialityLabel(doc.speciality)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {doc.experience ? `${doc.experience} yrs` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {doc.phone || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {renderStatusBadge(doc.isActive)}
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-1.5">
+                        <button
+                          onClick={() => openEditModal(doc)}
+                          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleToggleActive(doc.id, doc.isActive)
+                          }
+                          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-100"
+                        >
+                          {doc.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {doctors.map((doc) => (
-                      <tr key={doc.id} className="border-t hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-900">{doc.name}</div>
-                          <div className="text-xs text-gray-500">{doc.slug ? `@${doc.slug}` : ''}</div>
-                        </td>
-                        <td className="px-4 py-3">{doc.speciality || '-'}</td>
-                        <td className="px-4 py-3">{doc.experience ? `${doc.experience} yrs` : '-'}</td>
-                        <td className="px-4 py-3">{doc.phone || '-'}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              doc.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'
-                            }`}
-                          >
-                            {doc.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right space-x-2">
-                          <button
-                            onClick={() => openEditModal(doc)}
-                            className="text-xs px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleToggleActive(doc.id)}
-                            className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 rounded"
-                          >
-                            {doc.isActive ? 'Deactivate' : 'Activate'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Cards */}
-              <div className="md:hidden p-3 space-y-3">
-                {doctors.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="border p-4 rounded-xl bg-gray-50 shadow-sm"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-gray-900 text-base">{doc.name}</p>
-                        <p className="text-xs text-gray-500">{doc.speciality || '---'}</p>
-                      </div>
-
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full font-medium ${
-                          doc.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'
-                        }`}
-                      >
-                        {doc.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 text-sm text-gray-700 space-y-1">
-                      <p><strong>Experience:</strong> {doc.experience} yrs</p>
-                      <p><strong>Phone:</strong> {doc.phone || '-'}</p>
-                    </div>
-
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={() => openEditModal(doc)}
-                        className="flex-1 text-sm py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleToggleActive(doc.id)}
-                        className="flex-1 text-sm py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                      >
-                        {doc.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {/* END RESPONSIVE SECTION */}
-          </>
+          </div>
         )}
 
         {/* Modal */}
@@ -272,50 +325,99 @@ export default function DoctorsPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Name*</label>
-                <input name="name" className="input w-full" value={form.name} onChange={handleChange} required />
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Name*
+                </label>
+                <input
+                  name="name"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Email* {editingDoctorId ? '(optional)' : ''}
+                  Email*
                 </label>
                 <input
                   name="email"
                   type="email"
-                  className="input w-full"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   value={form.email}
                   onChange={handleChange}
                   required={!editingDoctorId}
                 />
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
-                <input name="phone" className="input w-full" value={form.phone} onChange={handleChange} />
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Phone
+                </label>
+                <input
+                  name="phone"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  value={form.phone}
+                  onChange={handleChange}
+                />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Speciality*</label>
-                <input name="speciality" className="input w-full" value={form.speciality} onChange={handleChange} required />
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Speciality*
+                </label>
+                <select
+                  name="speciality"
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  value={form.speciality}
+                  onChange={handleChange}
+                >
+                  <option value="">-- Select Speciality --</option>
+                  {SPECIALITIES_ENUM.map((spec) => (
+                    <option key={spec.value} value={spec.value}>
+                      {spec.label}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Experience (years)*</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Experience (yrs)*
+                </label>
                 <input
                   name="experience"
                   type="number"
                   min="0"
-                  className="input w-full"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   value={form.experience}
                   onChange={handleChange}
                   required
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Avatar URL</label>
-                <input name="avatar" className="input w-full" value={form.avatar} onChange={handleChange} />
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Avatar
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setAvatarFile(file);
+                    setForm((prev) => ({ ...prev, avatar: prev.avatar || '' }));
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+                {form.avatar && !avatarFile && (
+                  <p className="mt-1 text-xs text-gray-400 break-all">
+                    Current: {form.avatar}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -326,29 +428,24 @@ export default function DoctorsPage() {
               <input
                 name="password"
                 type="password"
-                className="input w-full"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 value={form.password}
                 onChange={handleChange}
                 required={!editingDoctorId}
-                placeholder={editingDoctorId ? 'Leave blank to keep existing password' : ''}
               />
             </div>
 
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                disabled={saving}
-                className="btn-primary flex-1 py-2.5 rounded-lg disabled:opacity-50"
-                style={{ backgroundColor: 'var(--color-primary)' }}
+                className="flex-1 py-2.5 rounded-lg bg-[#0b3b5e] text-white font-semibold text-sm shadow-sm hover:bg-[#08263e] transition-colors"
               >
-                {saving ? 'Saving...' : editingDoctorId ? 'Update Doctor' : 'Create Doctor'}
+                {editingDoctorId ? 'Update Doctor' : 'Create Doctor'}
               </button>
-
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                disabled={saving}
-                className="flex-1 py-2.5 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-50"
+                className="flex-1 py-2.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Cancel
               </button>

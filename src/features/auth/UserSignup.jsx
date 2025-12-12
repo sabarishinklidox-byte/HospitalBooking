@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import api from '../../lib/api';
-import UserLayout from '../../layouts/UserLayout.jsx';
+import { toast } from 'react-hot-toast';
+import { loginUser } from './authSlice';
 
 export default function UserSignup() {
   const navigate = useNavigate();
+  const location = useLocation();        // contains state.from from booking page
+  const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -21,55 +24,81 @@ export default function UserSignup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
     if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
     try {
       setLoading(true);
 
-      // CALLS: userSignup controller
-      const res = await api.post('/user/signup', {
+      // 1) Signup
+      await api.post('/user/signup', {
         name: form.name,
         email: form.email,
         phone: form.phone,
         password: form.password,
       });
 
-      // Optional: keep user logged in immediately
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
+      // 2) Auto-login
+      const loginResult = await dispatch(
+        loginUser({ email: form.email, password: form.password })
+      );
 
-      alert('Account created successfully!');
-      navigate('/login');
+      if (loginResult.meta.requestStatus === 'rejected') {
+        toast.success('Account created! Please log in.');
+        // keep from-state when going to login
+        navigate('/login', { state: location.state });
+        return;
+      }
+
+      toast.success('Account created and logged in!');
+
+      // 3) Go back where user came from (booking page)
+      const origin = location.state?.from?.pathname || '/';
+      navigate(origin, { replace: true });
+
     } catch (err) {
-      setError(err.response?.data?.error || 'Signup failed');
+      toast.error(err.response?.data?.error || 'Signup failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <UserLayout>
-      <div className="min-h-[60vh] flex items-center justify-center py-10">
-        <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          <h1 className="text-3xl font-bold text-center text-[#0b3b5e] mb-2">
-            Create Patient Account
-          </h1>
-          <p className="text-center text-gray-500 mb-8">
-            Sign up to book and manage your appointments.
+    <div className="min-h-screen flex bg-white">
+      {/* LEFT SIDE */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#003366] flex-col justify-center px-12 relative overflow-hidden">
+        <div className="relative z-10 text-white">
+          <h1 className="text-5xl font-extrabold mb-6">Welcome to MediCare</h1>
+          <p className="text-lg text-blue-100 leading-relaxed mb-8">
+            Join thousands of patients managing their health appointments with ease.
           </p>
-
-          {error && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4 text-center">
-              {error}
+          <div className="flex gap-4">
+            <div className="bg-white/10 p-4 rounded-lg backdrop-blur-sm">
+              <h3 className="font-bold text-xl">10k+</h3>
+              <p className="text-sm opacity-80">Patients</p>
             </div>
-          )}
+            <div className="bg-white/10 p-4 rounded-lg backdrop-blur-sm">
+              <h3 className="font-bold text-xl">500+</h3>
+              <p className="text-sm opacity-80">Top Doctors</p>
+            </div>
+          </div>
+        </div>
+        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
+      </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+      {/* RIGHT SIDE */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
+            <p className="text-gray-500 mt-2">Sign up to book your first appointment</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Full Name
@@ -78,7 +107,8 @@ export default function UserSignup() {
                 type="text"
                 name="name"
                 required
-                className="input w-full"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+                placeholder="John Doe"
                 value={form.name}
                 onChange={handleChange}
               />
@@ -86,13 +116,14 @@ export default function UserSignup() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
+                Email Address
               </label>
               <input
                 type="email"
                 name="email"
                 required
-                className="input w-full"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+                placeholder="you@example.com"
                 value={form.email}
                 onChange={handleChange}
               />
@@ -100,18 +131,19 @@ export default function UserSignup() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone (optional)
+                Phone Number <span className="text-gray-400">(Optional)</span>
               </label>
               <input
-                type="text"
+                type="tel"
                 name="phone"
-                className="input w-full"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+                placeholder="+1 234 567 890"
                 value={form.phone}
                 onChange={handleChange}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password
@@ -120,20 +152,22 @@ export default function UserSignup() {
                   type="password"
                   name="password"
                   required
-                  className="input w-full"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+                  placeholder="••••••••"
                   value={form.password}
                   onChange={handleChange}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm Password
+                  Confirm
                 </label>
                 <input
                   type="password"
                   name="confirmPassword"
                   required
-                  className="input w-full"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+                  placeholder="••••••••"
                   value={form.confirmPassword}
                   onChange={handleChange}
                 />
@@ -143,20 +177,24 @@ export default function UserSignup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 rounded-xl font-semibold text-white bg-[#0b3b5e] hover:bg-[#062739] transition disabled:opacity-60"
+              className="w-full py-3.5 rounded-lg font-bold text-white bg-[#003366] hover:bg-[#002244] shadow-lg hover:shadow-xl transition-all disabled:opacity-70"
             >
-              {loading ? 'Creating account...' : 'Sign Up'}
+              {loading ? 'Creating Account...' : 'Sign Up'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <p className="mt-8 text-center text-sm text-gray-600">
             Already have an account?{' '}
-            <Link to="/login" className="font-semibold text-[#0b3b5e] underline">
-              Log in
+            <Link
+              to="/login"
+              state={location.state}  // keep { from, doctor } when going to login
+              className="font-bold text-[#003366] hover:underline"
+            >
+              Log in here
             </Link>
           </p>
         </div>
       </div>
-    </UserLayout>
+    </div>
   );
 }

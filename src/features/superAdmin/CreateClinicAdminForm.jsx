@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
+import { toast } from 'react-hot-toast';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 const INITIAL_FORM = {
   email: '',
@@ -12,66 +14,80 @@ const INITIAL_FORM = {
 export default function CreateClinicAdminForm({ onCreated, onError }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [clinics, setClinics] = useState([]);
   const [loadingClinics, setLoadingClinics] = useState(true);
 
+  // 1. Fetch Clinics for Dropdown
   useEffect(() => {
-    const fetchClinics = async () => {
-      try {
-        setLoadingClinics(true);
-        const res = await api.get('/super-admin/clinics');
-        setClinics(res.data || []);
-      } catch (err) {
-        const msg = err.response?.data?.error || 'Failed to load clinics';
-        setError(msg);
-        if (onError) onError(msg);
-      } finally {
-        setLoadingClinics(false);
-      }
-    };
-    fetchClinics();
-  }, [onError]);
-
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (!form.email || !form.name || !form.password || form.password.length < 6) {
-      const msg = 'Email, name, and password (min 6 chars) are required.';
-      setError(msg);
-      if (onError) onError(msg);
-      return;
-    }
-
+  const fetchClinics = async () => {
     try {
-      setSaving(true);
-      const res = await api.post('/super-admin/admins', form);
-      setForm(INITIAL_FORM);
-      if (onCreated) onCreated(res.data);
+      setLoadingClinics(true);
+      const res = await api.get(`${ENDPOINTS.SUPER_ADMIN.CLINICS}?limit=100`);
+      const list = Array.isArray(res.data)
+        ? res.data
+        : res.data.data || res.data.clinics || [];
+      setClinics(list);
     } catch (err) {
-      const msg = err.response?.data?.error || 'Failed to create admin.';
-      setError(msg);
-      if (onError) onError(msg);
+      console.error('Failed to load clinics', err);
+      toast.error('Failed to load clinics list');
     } finally {
-      setSaving(false);
+      setLoadingClinics(false);
     }
   };
+  fetchClinics();
+}, []);
+
+const handleChange = (e) =>
+  setForm({ ...form, [e.target.name]: e.target.value });
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setSaving(true);
+
+  if (
+    !form.email ||
+    !form.name ||
+    !form.password ||
+    form.password.length < 6
+  ) {
+    toast.error('Email, Name, and Password (min 6 chars) are required.');
+    setSaving(false);
+    return;
+  }
+
+  try {
+    const payload = { ...form };
+    if (!payload.clinicId || payload.clinicId === '') {
+      delete payload.clinicId;
+    }
+
+    const res = await api.post(ENDPOINTS.SUPER_ADMIN.ADMINS, payload);
+
+    setForm(INITIAL_FORM);
+
+    if (onCreated) {
+      onCreated(res.data);
+    } else {
+      toast.success(`Admin "${res.data.name}" created!`);
+    }
+  } catch (err) {
+    console.error('Create Admin Error:', err);
+    const msg = err.response?.data?.error || 'Failed to create admin.';
+    if (onError) onError(msg);
+    else toast.error(msg);
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
-    <form onSubmit={handleSubmit}>
-      {error && (
-        <p className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-          {error}
-        </p>
-      )}
-
+    <form onSubmit={handleSubmit} className="w-full">
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        {/* Email */}
         <div>
-          <label className="block mb-1 text-sm font-medium text-gray-600">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Email*
           </label>
           <input
@@ -85,8 +101,9 @@ export default function CreateClinicAdminForm({ onCreated, onError }) {
           />
         </div>
 
+        {/* Name */}
         <div>
-          <label className="block mb-1 text-sm font-medium text-gray-600">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Full Name*
           </label>
           <input
@@ -99,8 +116,9 @@ export default function CreateClinicAdminForm({ onCreated, onError }) {
           />
         </div>
 
+        {/* Phone */}
         <div>
-          <label className="block mb-1 text-sm font-medium text-gray-600">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Phone
           </label>
           <input
@@ -112,34 +130,36 @@ export default function CreateClinicAdminForm({ onCreated, onError }) {
           />
         </div>
 
+        {/* Clinic Select */}
         <div>
-          <label className="block mb-1 text-sm font-medium text-gray-600">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Clinic (optional)
           </label>
           {loadingClinics ? (
-            <p className="text-xs text-gray-500">Loading clinics...</p>
+            <div className="h-10 w-full bg-gray-100 animate-pulse rounded-lg"></div>
           ) : (
             <select
               name="clinicId"
-              className="input w-full"
+              className="input w-full bg-white"
               value={form.clinicId}
               onChange={handleChange}
             >
               <option value="">Not assigned yet</option>
               {clinics.map((clinic) => (
                 <option key={clinic.id} value={clinic.id}>
-                  {clinic.name} ({clinic.city || 'No city'})
+                  {clinic.name} {clinic.city ? `(${clinic.city})` : ''}
                 </option>
               ))}
             </select>
           )}
-          <p className="mt-1 text-xs text-gray-500">
-            Select clinic by name, no need to copy/paste long IDs.
+          <p className="mt-1 text-xs text-gray-400">
+            Assign this admin to a specific clinic immediately.
           </p>
         </div>
 
+        {/* Password */}
         <div className="md:col-span-2">
-          <label className="block mb-1 text-sm font-medium text-gray-600">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Password* (min 6 chars)
           </label>
           <input
@@ -149,17 +169,19 @@ export default function CreateClinicAdminForm({ onCreated, onError }) {
             value={form.password}
             onChange={handleChange}
             required
-            placeholder="Temporary admin password"
+            minLength={6}
+            placeholder="Secure Admin Password"
           />
         </div>
       </div>
 
-      <div className="mt-6 sm:mt-8 flex justify-end">
+      {/* Actions */}
+      <div className="mt-8 flex justify-end pt-4 border-t border-gray-100">
         <button
           type="submit"
           disabled={saving}
-          className="btn-primary px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold rounded-lg disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-action)' }}
+          className="btn-primary w-full md:w-auto px-8 py-3 text-base font-bold rounded-xl shadow-lg disabled:opacity-70"
+          style={{ backgroundColor: '#003366' }} 
         >
           {saving ? 'Creating...' : 'Create Admin'}
         </button>

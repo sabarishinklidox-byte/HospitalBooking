@@ -190,3 +190,100 @@ html, body {
   background-color: var(--color-action-dark);
   transform: translateY(-2px);
 }
+/* =========================================
+   🌌 ALIGNMENT FIXED - DARK NAVY CALENDAR
+   ========================================= */
+
+//* =========================================
+   ✨ CLEAN MEDICAL CALENDAR (Fixed Size & Colors)
+   ========================================= */
+
+/* 1. Main Container - Remove fixed width/height issues */
+/* =========================================
+   ✨ CLEAN & ELEGANT CALENDAR (Final Fix)
+   ========================================= */
+
+/* 1. Main Container - fits perfectly in the white card */
+.react-datepicker {
+  font-family: 'Inter', system-ui, sans-serif !important;
+  border: none !important;
+  background-color: transparent !important; /* Let parent div handle bg */
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+
+/* 2. Header - Clean White with Navy Text */
+.react-datepicker__header {
+  background-color: transparent !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  padding-top: 0 !important;
+  padding-bottom: 15px !important;
+}
+
+/* 3. Month Name (e.g. December 2025) */
+.react-datepicker__current-month {
+  color: #003366 !important; /* Brand Navy */
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+}
+
+/* 4. Day Names (Su Mo Tu) */
+.react-datepicker__day-names {
+  margin-top: 10px !important;
+}
+
+.react-datepicker__day-name {
+  color: #9ca3af !important; /* Light Gray */
+  font-weight: 600 !important;
+  width: 2.5rem !important;
+  text-transform: uppercase;
+  font-size: 0.75rem !important;
+}
+
+/* 5. The Day Cells */
+.react-datepicker__day {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  line-height: 2.5rem !important;
+  margin: 2px !important;
+  border-radius: 50% !important; /* Circular */
+  color: #374151 !important; /* Dark Gray text */
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+/* 6. Hover Effect */
+.react-datepicker__day:hover:not(.react-datepicker__day--disabled):not(.react-datepicker__day--selected) {
+  background-color: #eff6ff !important; /* Light Blue */
+  color: #003366 !important;
+  font-weight: 700 !important;
+}
+
+/* 7. Selected Date (Navy Blue Circle) */
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #003366 !important; /* Brand Navy */
+  color: white !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 10px rgba(0, 51, 102, 0.3) !important;
+}
+
+/* 8. Today's Date */
+.react-datepicker__day--today:not(.react-datepicker__day--selected) {
+  color: #003366 !important;
+  font-weight: 800 !important;
+  background-color: #f3f4f6 !important;
+}
+
+/* 9. Navigation Icons (Dark arrows) */
+.react-datepicker__navigation-icon::before {
+  border-color: #003366 !important;
+  border-width: 2px 2px 0 0 !important;
+  height: 8px !important;
+  width: 8px !important;
+}
+
+.react-datepicker__navigation {
+  top: 8px !important;
+}

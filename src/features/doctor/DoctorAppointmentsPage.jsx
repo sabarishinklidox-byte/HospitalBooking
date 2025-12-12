@@ -1,39 +1,26 @@
-// src/features/doctor/DoctorAppointmentsPage.jsx
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import DoctorLayout from '../../layouts/DoctorLayout.jsx';
 import Loader from '../../components/Loader.jsx';
 import Modal from '../../components/Modal.jsx';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function DoctorAppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('UPCOMING'); // UPCOMING | COMPLETED
 
-  const [filters, setFilters] = useState({
-    date: '',
-    status: '',
-  });
-
-  const [selectedId, setSelectedId] = useState(null);
-  const [details, setDetails] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [prescriptionModalOpen, setPrescriptionModalOpen] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState(null);
+  const [prescriptionText, setPrescriptionText] = useState('');
 
   const fetchAppointments = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError('');
-      const res = await api.get('/doctor/appointments', {
-        params: {
-          date: filters.date || undefined,
-          status: filters.status || undefined,
-        },
-      });
+      const res = await api.get(ENDPOINTS.DOCTOR.APPOINTMENTS);
       setAppointments(res.data || []);
     } catch (err) {
-      setError('Failed to load appointments');
-      console.error(err);
+      console.error('Failed to load appointments', err);
     } finally {
       setLoading(false);
     }
@@ -41,286 +28,226 @@ export default function DoctorAppointmentsPage() {
 
   useEffect(() => {
     fetchAppointments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFilterChange = (e) =>
-    setFilters({ ...filters, [e.target.name]: e.target.value });
+  const filteredAppointments = appointments.filter((app) => {
+    if (filter === 'UPCOMING')
+      return ['CONFIRMED', 'PENDING'].includes(app.status);
+    if (filter === 'COMPLETED')
+      return ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(app.status);
+    return true;
+  });
 
-  const applyFilters = (e) => {
-    e.preventDefault();
-    fetchAppointments();
+  const openPrescription = (appt) => {
+    setSelectedAppt(appt);
+    setPrescriptionText(appt.prescription || '');
+    setPrescriptionModalOpen(true);
   };
 
-  const openDetails = async (id) => {
+  const handleSavePrescription = async () => {
+    if (!selectedAppt) return;
     try {
-      setSelectedId(id);
-      setDetails(null);
-      setDetailsLoading(true);
-      const res = await api.get(`/doctor/appointments/${id}`);
-      setDetails(res.data);
+      await api.patch(
+        ENDPOINTS.DOCTOR.UPDATE_PRESCRIPTION(selectedAppt.id),
+        { prescription: prescriptionText }
+      );
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === selectedAppt.id ? { ...a, prescription: prescriptionText } : a
+        )
+      );
+      setPrescriptionModalOpen(false);
     } catch (err) {
-      console.error(err);
-      // Optionally set a small error state for the modal
-    } finally {
-      setDetailsLoading(false);
+      console.error('Failed to save prescription', err);
     }
   };
 
-  const closeDetails = () => {
-    setSelectedId(null);
-    setDetails(null);
+  // ✅ Doctor status actions
+  const updateStatus = async (apptId, newStatus) => {
+    try {
+      await api.patch(ENDPOINTS.DOCTOR.APPOINTMENT_STATUS(apptId), {
+        status: newStatus,
+      });
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === apptId ? { ...a, status: newStatus } : a
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update status', err);
+    }
   };
 
-  const updateStatus = async (id, status) => {
-    try {
-      setActionLoading(true);
-      await api.patch(`/doctor/appointments/${id}/status`, { status });
-      // Refresh list
-      await fetchAppointments();
-      // Also refresh details if open
-      if (selectedId === id) {
-        const res = await api.get(`/doctor/appointments/${id}`);
-        setDetails(res.data);
-      }
-    } catch (err) {
-      alert('Failed to update status');
-    } finally {
-      setActionLoading(false);
-    }
+  const markCompleted = (apptId) => {
+    if (!window.confirm('Mark this appointment as COMPLETED?')) return;
+    updateStatus(apptId, 'COMPLETED');
+  };
+
+  const markNoShow = (apptId) => {
+    if (!window.confirm('Mark this appointment as NO_SHOW?')) return;
+    updateStatus(apptId, 'NO_SHOW');
   };
 
   return (
     <DoctorLayout>
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-[#0b3b5e] mb-6">
-          My Appointments
-        </h1>
-
-        {/* Filters */}
-        <form
-          onSubmit={applyFilters}
-          className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 mb-6"
-        >
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Date
-            </label>
-            <input
-              type="date"
-              name="date"
-              className="input w-full"
-              value={filters.date}
-              onChange={handleFilterChange}
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Status
-            </label>
-            <select
-              name="status"
-              className="input w-full"
-              value={filters.status}
-              onChange={handleFilterChange}
+      <div className="p-6">
+        {/* Header & Filter Tabs */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-[#0b3b5e]">My Appointments</h1>
+          <div className="bg-gray-100 p-1 rounded-lg flex">
+            <button
+              onClick={() => setFilter('UPCOMING')}
+              className={`px-4 py-2 text-sm font-bold rounded-md transition ${
+                filter === 'UPCOMING'
+                  ? 'bg-white shadow text-[#0b3b5e]'
+                  : 'text-gray-500'
+              }`}
             >
-              <option value="">All</option>
-              <option value="PENDING">Pending</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="NO_SHOW">No Show</option>
-            </select>
-          </div>
-          <div className="flex items-end">
-            <button type="submit" className="btn-primary h-[42px] px-6">
-              Apply
+              Upcoming
+            </button>
+            <button
+              onClick={() => setFilter('COMPLETED')}
+              className={`px-4 py-2 text-sm font-bold rounded-md transition ${
+                filter === 'COMPLETED'
+                  ? 'bg-white shadow text-[#0b3b5e]'
+                  : 'text-gray-500'
+              }`}
+            >
+              History
             </button>
           </div>
-        </form>
+        </div>
 
-        {/* Table */}
+        {/* Content */}
         {loading ? (
           <Loader />
-        ) : error ? (
-          <p className="text-red-500">{error}</p>
-        ) : appointments.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
-            <p className="text-gray-500">No appointments found.</p>
-          </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 text-gray-600 font-medium">
-                  <tr>
-                    <th className="px-4 py-3">Date &amp; Time</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Slot</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Payment</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {appointments.map((app) => (
-                    <tr key={app.id} className="hover:bg-gray-50 transition">
-                      {/* DATE & TIME COLUMN - FIXED */}
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-gray-900">
-                          {app.dateFormatted ||
-                            (app.slot?.date &&
-                              new Date(app.slot.date).toLocaleDateString()) ||
-                            '-'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {app.timeFormatted || app.slot?.time || ''}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">
-                          {app.patientName || app.user?.name || 'Unknown'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {app.patientPhone || app.user?.phone || ''}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="text-gray-700">
-                          {app.slot?.time} ({app.slot?.duration}min)
-                        </div>
-                        {app.slot?.price > 0 ? (
-                          <div className="text-xs font-bold text-green-600">
-                            ₹{app.slot.price}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-400">Free</div>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+          <div className="space-y-4">
+            {filteredAppointments.length === 0 ? (
+              <p className="text-center text-gray-500 py-10">
+                No appointments found.
+              </p>
+            ) : (
+              filteredAppointments.map((app) => (
+                <div
+                  key={app.id}
+                  className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition"
+                >
+                  <div className="flex flex-col sm:flex-row justify-between gap-4">
+                    {/* Patient Info */}
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-800">
+                        {app.user?.name || 'Unknown Patient'}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        📅{' '}
+                        {new Date(app.slot.date).toLocaleDateString()} at{' '}
+                        <span className="font-mono text-black font-bold">
+                          {app.slot.time}
+                        </span>
+                      </p>
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded mt-2 inline-block
                           ${
                             app.status === 'CONFIRMED'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-green-100 text-green-700'
                               : app.status === 'PENDING'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : app.status === 'CANCELLED'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : app.status === 'COMPLETED'
+                              ? 'bg-blue-100 text-blue-700'
+                              : app.status === 'NO_SHOW'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-gray-100'
                           }`}
-                        >
-                          {app.status}
-                        </span>
-                      </td>
+                      >
+                        {app.status}
+                      </span>
+                    </div>
 
-                      <td className="px-4 py-3 text-gray-500">
-                        {app.slot?.price > 0 ? 'Paid' : 'Free'}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
+                    {/* Actions */}
+                    <div className="flex flex-col items-end gap-2">
+                      {/* Rx button */}
+                      {['CONFIRMED', 'COMPLETED'].includes(app.status) && (
                         <button
-                          onClick={() => openDetails(app.id)}
-                          className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition"
+                          onClick={() => openPrescription(app)}
+                          className="flex items-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-100 transition"
                         >
-                          Details
+                          <span>💊</span>{' '}
+                          {app.prescription ? 'Edit Rx' : 'Write Rx'}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+
+                      {/* Status action buttons for upcoming/confirmed */}
+                      {['CONFIRMED'].includes(app.status) && (
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            onClick={() => markCompleted(app.id)}
+                            className="px-3 py-1 text-xs font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                          >
+                            Mark Completed
+                          </button>
+                          <button
+                            onClick={() => markNoShow(app.id)}
+                            className="px-3 py-1 text-xs font-bold rounded-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                          >
+                            Mark No‑Show
+                          </button>
+                        </div>
+                      )}
+
+                      {app.prescription && (
+                        <span className="text-[10px] text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
+                          ✓ Prescription Sent
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
-        {/* Modal */}
+        {/* Prescription Modal */}
         <Modal
-          isOpen={!!selectedId}
-          onClose={closeDetails}
-          title="Appointment Details"
+          isOpen={prescriptionModalOpen}
+          onClose={() => setPrescriptionModalOpen(false)}
+          title="📝 Medical Prescription"
         >
-          {detailsLoading || !details ? (
-            <Loader />
-          ) : (
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                    Patient
-                  </p>
-                  <p className="font-semibold text-gray-900">
-                    {details.patient?.name || details.user?.name}
-                  </p>
-                  <p className="text-gray-600">
-                    {details.patient?.phone || details.user?.phone}
-                  </p>
-                  <p className="text-gray-600 text-xs">
-                    {details.patient?.email || details.user?.email}
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                    Slot Info
-                  </p>
-                  <p className="font-semibold text-gray-900">
-                    {details.dateFormatted ||
-                      (details.slot?.date &&
-                        new Date(details.slot.date).toLocaleDateString())}
-                  </p>
-                  <p className="text-gray-600">{details.slot?.time}</p>
-                  <p className="text-xs text-gray-500">
-                    {details.slot?.type === 'PAID'
-                      ? `₹${details.slot.price}`
-                      : 'Free'}
-                  </p>
-                </div>
-              </div>
-
-              {details.notes && (
-                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
-                  <p className="text-xs font-bold text-yellow-800 mb-1">
-                    Notes from Patient
-                  </p>
-                  <p className="text-yellow-900">{details.notes}</p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                <div>
-                  <span className="text-gray-500 text-xs">Status: </span>
-                  <span className="font-bold text-gray-900">
-                    {details.status}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  {details.status !== 'COMPLETED' &&
-                    details.status !== 'CANCELLED' && (
-                      <button
-                        onClick={() => updateStatus(details.id, 'COMPLETED')}
-                        disabled={actionLoading}
-                        className="btn-primary px-3 py-1.5 text-xs"
-                      >
-                        Mark Completed
-                      </button>
-                    )}
-                  {details.status !== 'NO_SHOW' &&
-                    details.status !== 'CANCELLED' &&
-                    details.status !== 'COMPLETED' && (
-                      <button
-                        onClick={() => updateStatus(details.id, 'NO_SHOW')}
-                        disabled={actionLoading}
-                        className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                      >
-                        Mark No Show
-                      </button>
-                    )}
-                </div>
-              </div>
+          <div className="space-y-4">
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-sm text-blue-900">
+              <p>
+                <strong>Patient:</strong> {selectedAppt?.user?.name}
+              </p>
+              <p>
+                <strong>Date:</strong>{' '}
+                {selectedAppt &&
+                  new Date(selectedAppt.slot.date).toLocaleDateString()}
+              </p>
             </div>
-          )}
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Prescription Details:
+              </label>
+              <textarea
+                className="w-full h-40 p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                placeholder="Write prescription here..."
+                value={prescriptionText}
+                onChange={(e) => setPrescriptionText(e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">
+                Visible to Patient & Admin immediately after saving.
+              </p>
+            </div>
+
+            <button
+              onClick={handleSavePrescription}
+              className="w-full bg-[#0b3b5e] text-white py-3 rounded-lg font-bold hover:bg-[#092d47] transition shadow-lg"
+            >
+              Save & Send Prescription
+            </button>
+          </div>
         </Modal>
       </div>
     </DoctorLayout>

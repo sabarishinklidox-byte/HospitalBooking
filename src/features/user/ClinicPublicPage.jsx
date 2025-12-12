@@ -1,10 +1,31 @@
+// src/features/user/ClinicPublicPage.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../lib/api';
 import UserLayout from '../../layouts/UserLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { ENDPOINTS } from '../../lib/endpoints';
 
-const DEFAULT_DOCTOR_IMAGE = "/default-doctor.jpg"; // Must be in /public folder
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+const toFullUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
+const DEFAULT_BANNER =
+  'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=1200';
+const DEFAULT_LOGO =
+  'https://cdn-icons-png.flaticon.com/512/3304/3304555.png';
+
+const formatClinicTimings = (timings) => {
+  if (!timings) return 'Timings not available';
+  if (typeof timings === 'string') return timings;
+  if (typeof timings === 'object' && timings.description) return timings.description;
+  return 'Check Timings';
+};
 
 export default function ClinicPublicPage() {
   const { clinicId } = useParams();
@@ -17,10 +38,12 @@ export default function ClinicPublicPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const clinicRes = await api.get(`/public/clinics/${clinicId}`);
+        const clinicRes = await api.get(ENDPOINTS.PUBLIC.CLINIC_BY_ID(clinicId));
         setClinic(clinicRes.data);
 
-        const docRes = await api.get(`/public/clinics/${clinicId}/doctors`);
+        const docRes = await api.get(
+          ENDPOINTS.PUBLIC.CLINIC_DOCTORS(clinicId)
+        );
         setDoctors(docRes.data);
       } catch (err) {
         setError('Clinic not found. Please check the link.');
@@ -31,47 +54,226 @@ export default function ClinicPublicPage() {
     fetchData();
   }, [clinicId]);
 
-  if (loading) return <UserLayout><Loader /></UserLayout>;
-  if (error) return <UserLayout><div className="p-10 text-center text-red-500">{error}</div></UserLayout>;
+  if (loading)
+    return (
+      <UserLayout>
+        <Loader />
+      </UserLayout>
+    );
+  if (error)
+    return (
+      <UserLayout>
+        <div className="p-20 text-center text-red-500 bg-red-50 border border-red-100 m-10 rounded-xl">
+          {error}
+        </div>
+      </UserLayout>
+    );
   if (!clinic) return null;
+
+  const bannerSrc = toFullUrl(clinic.banner) || DEFAULT_BANNER;
+  const logoSrc = toFullUrl(clinic.logo) || DEFAULT_LOGO;
+
+  const stylePrimaryText = { color: 'var(--color-primary)' };
+  const stylePrimaryBg = { backgroundColor: 'var(--color-primary)' };
+  const styleSecondaryText = { color: 'var(--color-secondary)' };
 
   return (
     <UserLayout>
-      {/* Clinic Banner */}
-      <div className="bg-[#0b3b5e] text-white">
-        <div className="max-w-6xl mx-auto px-6 py-12 text-center">
-           <h1 className="text-3xl md:text-4xl font-bold mb-2">{clinic.name}</h1>
-           <p className="opacity-90">{clinic.address}, {clinic.city}</p>
-        </div>
-      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Clinic banner + logo header */}
+        <div className="relative w-full mb-10">
+          {/* Banner */}
+          <div className="relative rounded-2xl overflow-hidden shadow-xl h-64 sm:h-80 w-full">
+            <img
+              src={bannerSrc}
+              alt="Clinic banner"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = DEFAULT_BANNER;
+              }}
+            />
+            <div className="absolute inset-0 bg-gray-900/40" />
+          </div>
 
-      {/* Doctors List */}
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Our Specialists</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {doctors.map((doctor) => (
-            <div key={doctor.id} className="bg-white rounded-xl shadow-sm border p-5 flex flex-col items-center text-center">
-              <div className="w-24 h-24 rounded-full bg-gray-200 mb-4 overflow-hidden">
-                <img
-                  src={doctor.avatar || DEFAULT_DOCTOR_IMAGE}
-                  alt={doctor.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => { e.currentTarget.src = DEFAULT_DOCTOR_IMAGE; }}
-                />
-              </div>
-              <h3 className="font-bold text-lg">{doctor.name}</h3>
-              <p className="text-[#0b3b5e] font-medium text-sm">{doctor.speciality}</p>
-              
-              {/* ✅ FIXED LINK: Points to the booking page with correct doctor data */}
-              <Link
-                to={`/doctors/${doctor.id}/book`}
-                state={{ doctor: { ...doctor, clinicId: clinic.id } }}
-                className="mt-4 w-full py-2.5 text-center bg-[#0b3b5e] text-white font-semibold rounded-lg hover:bg-[#092c46]"
-              >
-                Book Visit
-              </Link>
+          {/* Floating info card */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[-80px] w-[95%] sm:w-[90%] md:w-full max-w-4xl bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100 flex items-center space-x-6">
+            {/* Logo */}
+            <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 bg-gray-50 p-2 rounded-2xl shadow-md border-4 border-white">
+              <img
+                src={logoSrc}
+                alt="Clinic logo"
+                className="w-full h-full object-contain rounded-xl"
+                onError={(e) => {
+                  e.currentTarget.src = DEFAULT_LOGO;
+                }}
+              />
             </div>
-          ))}
+
+            {/* Clinic details */}
+            <div className="flex-1 min-w-0">
+              <h1
+                className="text-2xl md:text-3xl font-extrabold truncate"
+                style={stylePrimaryText}
+              >
+                {clinic.name}
+              </h1>
+
+              <p className="flex items-center gap-2 text-sm text-gray-600 mb-2 font-medium">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style={styleSecondaryText}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  ></path>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                  ></path>
+                </svg>
+                {clinic.address}, {clinic.city}
+                {clinic.pincode ? ` - ${clinic.pincode}` : ''}
+              </p>
+
+              {clinic.timings && (
+                <span
+                  className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-medium text-white"
+                  style={{ backgroundColor: 'var(--color-action)' }}
+                >
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {formatClinicTimings(clinic.timings)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="mt-[120px] md:mt-[100px] space-y-10">
+          {/* About */}
+          {clinic.details && (
+            <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100">
+              <h3
+                className="text-xl font-bold text-gray-900 mb-4 border-b border-gray-100 pb-2"
+                style={stylePrimaryText}
+              >
+                About {clinic.name}
+              </h3>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {clinic.details}
+              </p>
+            </div>
+          )}
+
+          {/* Doctors */}
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <span className="text-3xl" style={stylePrimaryText}>
+                👨‍⚕️
+              </span>
+              Available Specialists
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {doctors.length === 0 ? (
+                <div className="col-span-3 text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-500">
+                  No doctors listed for this clinic yet.
+                </div>
+              ) : (
+                doctors.map((doctor) => {
+                  const avatarUrl = doctor.avatar
+                    ? toFullUrl(doctor.avatar)
+                    : null;
+
+                  return (
+                    <div
+                      key={doctor.id}
+                      className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex flex-col items-center text-center transition-all hover:shadow-xl group"
+                    >
+                      {/* Avatar */}
+                      <div className="w-28 h-28 rounded-full bg-gray-100 mb-4 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt={doctor.name}
+                            className="w-full h-full object-cover rounded-full"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextSibling.style.display = 'block';
+                            }}
+                          />
+                        ) : null}
+                        <span
+                          className="hidden text-3xl"
+                          style={{ display: avatarUrl ? 'none' : 'block' }}
+                        >
+                          👨‍⚕️
+                        </span>
+                      </div>
+
+                      {/* Info */}
+                      <h3
+                        className="font-extrabold text-xl text-gray-900 transition-colors"
+                        style={stylePrimaryText}
+                      >
+                        Dr. {doctor.name}
+                      </h3>
+                      <p
+                        className="font-semibold text-base mb-1"
+                        style={styleSecondaryText}
+                      >
+                        {doctor.speciality}
+                      </p>
+                      <p className="text-sm text-gray-500 mb-3">
+                        {doctor.experience} Yrs Experience
+                      </p>
+
+                      {/* Ratings */}
+                      <div className="flex items-center gap-1.5 mb-5 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-100">
+                        <svg
+                          className="w-4 h-4 text-yellow-500"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <span className="font-bold text-gray-800 text-sm">
+                          {doctor.rating > 0 ? doctor.rating : 'New'}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          ({doctor.reviewCount || 0} reviews)
+                        </span>
+                      </div>
+
+                      {/* Booking button */}
+                      <Link
+                        to={`/doctors/${doctor.id}/book`}
+                        state={{ doctor: { ...doctor, clinicId: clinic.id } }}
+                        className="w-full py-3 text-center text-white font-bold text-base rounded-xl transition-colors shadow-lg hover:opacity-90"
+                        style={stylePrimaryBg}
+                      >
+                        Book Appointment
+                      </Link>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </UserLayout>

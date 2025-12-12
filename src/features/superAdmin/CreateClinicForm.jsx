@@ -1,144 +1,239 @@
+// src/features/superAdmin/CreateClinicForm.jsx
 import React, { useState } from 'react';
 import api from '../../lib/api';
+import { toast } from 'react-hot-toast';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 const INITIAL_FORM = {
   name: '',
   address: '',
   city: '',
   pincode: '',
-  accountNumber: '',
-  ifscCode: '',
-  bankName: '',
   timings: '',
   details: '',
+  logo: '',
+  banner: '',
 };
 
 export default function CreateClinicForm({ onCreated }) {
   const [form, setForm] = useState(INITIAL_FORM);
-  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState({ logo: false, banner: false });
 
   const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleFileUpload = async (e, field) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading((prev) => ({ ...prev, [field]: true }));
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      // Backend: POST /api/super-admin/clinics/upload
+      const res = await api.post('/super-admin/clinics/upload', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setForm((prev) => ({ ...prev, [field]: res.data.url }));
+      toast.success(`${field === 'logo' ? 'Logo' : 'Banner'} uploaded`);
+    } catch (err) {
+      console.error('Upload error', err);
+      toast.error('Failed to upload image');
+    } finally {
+      setUploading((prev) => ({ ...prev, [field]: false }));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
     if (!form.name || !form.address || !form.city || !form.pincode) {
-      setError('Name, address, city, and pincode are required.');
+      toast.error('Clinic Name, Address, City, and Pincode are required.');
       return;
     }
 
+    setSaving(true);
     try {
-      setSaving(true);
-      const res = await api.post('/super-admin/clinics', form);
+      const payload = {
+        name: form.name,
+        address: form.address,
+        city: form.city,
+        pincode: form.pincode,
+        timings: form.timings || undefined,
+        details: form.details || undefined,
+        logo: form.logo || undefined,
+        banner: form.banner || undefined,
+      };
+
+      const res = await api.post(ENDPOINTS.SUPER_ADMIN.CLINICS, payload);
+
       setForm(INITIAL_FORM);
+      toast.success(`Clinic "${res.data.name}" created`);
       if (onCreated) onCreated(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create clinic');
+      console.error('Create clinic error', err);
+      const msg = err.response?.data?.error || 'Failed to create clinic.';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-gray-200 max-w-3xl mx-auto"
-    >
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">
+        Basic Details
+      </h3>
 
-      {/* HEADER */}
-      <h2 className="text-2xl font-semibold mb-6 text-center sm:text-left text-[#003366]">
-        Create Clinic
-      </h2>
-
-      {/* ERROR */}
-      {error && (
-        <p className="mb-4 text-sm text-red-600 font-medium bg-red-50 p-2 rounded-md border border-red-200">
-          {error}
-        </p>
-      )}
-
-      {/* FORM GRID */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Clinic Name */}
-        <div className="col-span-1 sm:col-span-2">
-          <label className="input-label">Clinic Name*</label>
-          <input name="name" className="input" value={form.name} onChange={handleChange} />
+        <div className="md:col-span-2">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Clinic Name*
+          </label>
+          <input
+            name="name"
+            className="input w-full"
+            value={form.name}
+            onChange={handleChange}
+            required
+            placeholder="e.g. City Care Hospital"
+          />
+        </div>
+
+        {/* Logo (file upload) */}
+        <div>
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Logo
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFileUpload(e, 'logo')}
+          />
+          {uploading.logo && (
+            <p className="mt-1 text-xs text-gray-400">Uploading logo...</p>
+          )}
+          {form.logo && (
+            <img
+              src={form.logo}
+              alt="Logo preview"
+              className="h-10 mt-2 rounded border object-contain"
+            />
+          )}
+        </div>
+
+        {/* Banner (file upload) */}
+        <div>
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Banner
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFileUpload(e, 'banner')}
+          />
+          {uploading.banner && (
+            <p className="mt-1 text-xs text-gray-400">Uploading banner...</p>
+          )}
+          {form.banner && (
+            <img
+              src={form.banner}
+              alt="Banner preview"
+              className="h-16 mt-2 rounded border object-cover"
+            />
+          )}
+        </div>
+
+        {/* Address */}
+        <div className="md:col-span-2">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Address*
+          </label>
+          <input
+            name="address"
+            className="input w-full"
+            value={form.address}
+            onChange={handleChange}
+            required
+            placeholder="Full Street Address"
+          />
         </div>
 
         {/* City */}
         <div>
-          <label className="input-label">City*</label>
-          <input name="city" className="input" value={form.city} onChange={handleChange} />
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            City*
+          </label>
+          <input
+            name="city"
+            className="input w-full"
+            value={form.city}
+            onChange={handleChange}
+            required
+            placeholder="Mumbai"
+          />
         </div>
 
         {/* Pincode */}
         <div>
-          <label className="input-label">Pincode*</label>
-          <input name="pincode" className="input" value={form.pincode} onChange={handleChange} />
-        </div>
-
-        {/* Address */}
-        <div className="col-span-1 sm:col-span-2">
-          <label className="input-label">Address*</label>
-          <input name="address" className="input" value={form.address} onChange={handleChange} />
-        </div>
-
-        {/* Account Number */}
-        <div>
-          <label className="input-label">Account Number</label>
-          <input name="accountNumber" className="input" value={form.accountNumber} onChange={handleChange} />
-        </div>
-
-        {/* IFSC */}
-        <div>
-          <label className="input-label">IFSC Code</label>
-          <input name="ifscCode" className="input" value={form.ifscCode} onChange={handleChange} />
-        </div>
-
-        {/* Bank Name */}
-        <div>
-          <label className="input-label">Bank Name</label>
-          <input name="bankName" className="input" value={form.bankName} onChange={handleChange} />
-        </div>
-
-        {/* Timings */}
-        <div>
-          <label className="input-label">Timings</label>
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Pincode*
+          </label>
           <input
-            name="timings"
-            className="input"
-            placeholder="Mon–Fri 9AM–6PM"
-            value={form.timings}
+            name="pincode"
+            className="input w-full"
+            value={form.pincode}
             onChange={handleChange}
+            required
+            placeholder="400001"
           />
         </div>
 
-        {/* Details */}
-        <div className="col-span-1 sm:col-span-2">
-          <label className="input-label">Details</label>
+        {/* Timings (optional) */}
+        <div className="md:col-span-2">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Timings (Optional)
+          </label>
+          <input
+            name="timings"
+            className="input w-full"
+            value={form.timings}
+            onChange={handleChange}
+            placeholder="Mon–Sat: 9am – 9pm"
+          />
+        </div>
+
+        {/* Details (optional) */}
+        <div className="md:col-span-2">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Details (Optional)
+          </label>
           <textarea
             name="details"
-            rows={3}
-            className="input"
+            className="input w-full min-h-[80px]"
             value={form.details}
             onChange={handleChange}
-            placeholder="A brief description of the clinic."
+            placeholder="Short description, specialties, parking info, etc."
           />
         </div>
       </div>
 
-      {/* BUTTON */}
-      <button
-        type="submit"
-        disabled={saving}
-        className="mt-8 w-full bg-[#003366] text-white py-3 rounded-xl text-lg font-semibold shadow-md hover:bg-[#002552] disabled:opacity-50 transition-all"
-      >
-        {saving ? 'Saving...' : 'Create Clinic'}
-      </button>
+      {/* Actions */}
+      <div className="mt-4 flex justify-end pt-4 border-t border-gray-100">
+        <button
+          type="submit"
+          disabled={saving}
+          className="btn-primary w-full md:w-auto px-8 py-3 text-base font-bold rounded-xl shadow-lg disabled:opacity-70"
+          style={{ backgroundColor: '#003366' }}
+        >
+          {saving ? 'Creating...' : 'Create Clinic'}
+        </button>
+      </div>
     </form>
   );
 }

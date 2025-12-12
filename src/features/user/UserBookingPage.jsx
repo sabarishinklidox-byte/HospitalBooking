@@ -1,11 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+
 import api from '../../lib/api';
 import UserLayout from '../../layouts/UserLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import toast from 'react-hot-toast';
+import { ENDPOINTS } from '../../lib/endpoints';
 
-const DEFAULT_DOCTOR_IMAGE = "/default-doctor.jpg";
+// API base + helper to build full URLs
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+const toFullUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
+// Helper to format price
+const formatPrice = (price) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+  }).format(price);
+};
 
 export default function UserBookingPage() {
   const { doctorId } = useParams();
@@ -13,183 +35,313 @@ export default function UserBookingPage() {
   const navigate = useNavigate();
   const { user, token } = useSelector((state) => state.auth);
 
-  // 1. Initialize doctor from navigation state if available
   const [doctor, setDoctor] = useState(location.state?.doctor || null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [error, setError] = useState('');
 
-  // 2. Fetch Doctor Details (if accessed directly via URL)
+  // 1. Fetch Doctor
   useEffect(() => {
     if (doctor) return;
-    
+
     const fetchDoctor = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/public/doctors/${doctorId}`);
+        const res = await api.get(ENDPOINTS.PUBLIC.DOCTOR_BY_ID(doctorId));
         setDoctor(res.data);
       } catch (err) {
         setError('Doctor not found.');
+        toast.error('Doctor not found');
       } finally {
         setLoading(false);
       }
     };
+
     fetchDoctor();
   }, [doctorId, doctor]);
 
-  // 3. Fetch Slots for Selected Date
+  // 2. Fetch Slots
   useEffect(() => {
     if (!doctor || !selectedDate) return;
 
     const fetchSlots = async () => {
       setLoading(true);
       setError('');
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+
       try {
-        // Backend should return slots with 'isBooked' flag
-        const res = await api.get(`/public/doctors/${doctor.id}/slots`, { 
-          params: { date: selectedDate } 
-        });
+        const res = await api.get(
+          ENDPOINTS.PUBLIC.DOCTOR_SLOTS(doctor.id),
+          { params: { date: formattedDate } }
+        );
         setSlots(res.data);
+        setSelectedSlot(null);
       } catch (err) {
-        setError('Failed to load slots.');
+        console.error(err);
+        toast.error('Failed to load slots');
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchSlots();
   }, [doctor, selectedDate]);
 
-  // 4. Handle Booking Action
+  // 3. Booking Handler (CORRECTED LOGIC)
   const handleBookNow = async () => {
     if (!selectedSlot) return;
 
-    // Redirect to Login if needed (Pass 'from' location to return later)
+    // A. Auth Check
     if (!token || !user) {
-      navigate('/login', { 
-        state: { 
-          from: location,
-          doctor: doctor 
-        } 
-      });
+      toast('Please login to continue booking', { icon: '🔒' });
+      navigate('/login', { state: { from: location, doctor } });
       return;
     }
 
     try {
-      setLoading(true);
-      
-      // Safe Clinic ID check
-      const finalClinicId = doctor.clinicId || doctor.clinic?.id;
+      setBookingLoading(true);
 
+      // B. Resolve Clinic ID
+      const finalClinicId = doctor.clinicId || doctor.clinic?.id;
       if (!finalClinicId) {
-        alert("System Error: Clinic ID missing for this doctor.");
+        toast.error('System Error: Missing Clinic ID');
         return;
       }
 
-      await api.post('/user/appointments', {
-        slotId: selectedSlot.id,
-        doctorId: doctor.id,
-        clinicId: finalClinicId,
-        bookingSection: 'GENERAL'
-      });
+      // ----------------------------------------------------------------
+      // CASE 1: ONLINE PAYMENT (Stripe Redirect)
+      // ----------------------------------------------------------------
+      if (selectedSlot.paymentMode === 'ONLINE') {
+         // Create Stripe Session
+        const res = await api.post(ENDPOINTS.PAYMENT.CREATE_CHECKOUT_SESSION, {
+             slotId: selectedSlot.id,
+             doctorId: doctor.id,
+             userId: user.id
+         });
 
-      alert('Appointment booked successfully!');
-      navigate('/my-appointments');
-      
+         // Redirect to Stripe
+         if (res.data.url) {
+             window.location.href = res.data.url;
+         } else {
+             toast.error("Failed to initiate payment");
+         }
+      } 
+      // ----------------------------------------------------------------
+      // CASE 2: OFFLINE / FREE (Direct Booking)
+      // ----------------------------------------------------------------
+      else {
+        // Direct API call to book appointment
+        await api.post(ENDPOINTS.USER.APPOINTMENTS, {
+          slotId: selectedSlot.id,
+          doctorId: doctor.id,
+          clinicId: finalClinicId,
+          bookingSection: 'GENERAL',
+        });
+
+        toast.success('Appointment Confirmed! 🎉');
+        navigate('/my-appointments');
+      }
+
     } catch (err) {
-      // Specific error message for booked slots
       const msg = err.response?.data?.error;
+      console.error("Booking Error:", err);
+
       if (msg && msg.includes('Unique constraint')) {
-        alert('Someone just booked this slot! Please choose another.');
-        // Optional: Refresh slots here
-        setSlots(prev => prev.map(s => s.id === selectedSlot.id ? {...s, isBooked: true} : s));
+        toast.error('Slot already taken. Please pick another.');
+        setSlots((prev) =>
+          prev.map((s) =>
+            s.id === selectedSlot.id ? { ...s, isBooked: true } : s
+          )
+        );
         setSelectedSlot(null);
       } else {
-        alert(msg || 'Booking failed.');
+        toast.error(msg || 'Booking failed. Please try again.');
       }
-      setLoading(false);
+    } finally {
+      setBookingLoading(false);
     }
   };
 
-  if (loading && !doctor) return <UserLayout><Loader /></UserLayout>;
-  if (error) return <UserLayout><p className="text-center p-10 text-red-500">{error}</p></UserLayout>;
+  if (loading && !doctor)
+    return (
+      <UserLayout>
+        <div className="h-screen flex items-center justify-center">
+          <Loader />
+        </div>
+      </UserLayout>
+    );
+
+  if (error)
+    return (
+      <UserLayout>
+        <div className="h-screen flex items-center justify-center text-red-500 font-medium">
+          {error}
+        </div>
+      </UserLayout>
+    );
+
   if (!doctor) return null;
+
+  const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
+  const doctorInitial = doctor.name ? doctor.name.charAt(0).toUpperCase() : 'D';
 
   return (
     <UserLayout>
-      <div className="max-w-5xl mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* LEFT SIDE: Doctor Profile */}
-        <div className="bg-white p-6 rounded-xl shadow-lg text-center h-fit border border-gray-100">
-           <div className="w-24 h-24 mx-auto bg-gray-100 rounded-full overflow-hidden mb-4 border-4 border-white shadow">
-             <img 
-                src={doctor.avatar || DEFAULT_DOCTOR_IMAGE} 
-                alt={doctor.name} 
-                className="w-full h-full object-cover"
-                onError={(e) => { e.currentTarget.src = DEFAULT_DOCTOR_IMAGE; }}
-             />
-           </div>
-           <h2 className="text-xl font-bold text-[#0b3b5e]">{doctor.name}</h2>
-           <p className="text-gray-600 font-medium">{doctor.speciality}</p>
-           {doctor.clinic && (
-             <p className="text-sm text-gray-400 mt-2">{doctor.clinic.name}</p>
-           )}
+      <div className="max-w-6xl mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT: Doctor & Calendar */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
+            <div className="w-28 h-28 mx-auto bg-[#003366] rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-md overflow-hidden text-white relative">
+              {avatarUrl && (
+                <img
+                  src={avatarUrl}
+                  alt={doctor.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const sibling = e.currentTarget.nextSibling;
+                    if (sibling) sibling.style.display = 'block';
+                  }}
+                />
+              )}
+              <span
+                className="text-4xl font-bold uppercase absolute"
+                style={{ display: avatarUrl ? 'none' : 'block' }}
+              >
+                {doctorInitial}
+              </span>
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900">{doctor.name}</h2>
+            <p className="text-blue-600 font-medium mb-2">{doctor.speciality}</p>
+            {doctor.clinic && (
+              <div className="flex items-center justify-center gap-1 text-sm text-gray-500 bg-gray-50 py-2 rounded-lg">
+                <span>🏥</span> {doctor.clinic.name}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="font-bold text-[#003366] flex items-center gap-2">
+                <span>📅</span> Select Date
+              </h3>
+            </div>
+            <div className="p-4 flex justify-center booking-calendar-wrapper">
+              <DatePicker
+                selected={selectedDate}
+                onChange={(date) => setSelectedDate(date)}
+                inline
+                minDate={new Date()}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* RIGHT SIDE: Slot Selection */}
-        <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-           <label className="block font-bold text-gray-700 mb-2">Select Date:</label>
-           <input 
-             type="date" 
-             value={selectedDate} 
-             min={new Date().toISOString().split('T')[0]}
-             onChange={(e) => setSelectedDate(e.target.value)}
-             className="input w-full mb-6 border-gray-300 focus:ring-[#0b3b5e]"
-           />
+        {/* RIGHT: Slots */}
+        <div className="lg:col-span-8">
+          <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-xl text-gray-900">Available Slots</h3>
+                <p className="text-sm text-gray-500">
+                  For{' '}
+                  {selectedDate.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </p>
+              </div>
+              <div className="text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
+                {slots.filter((s) => !s.isBooked).length} Openings
+              </div>
+            </div>
 
-           <h3 className="font-bold text-gray-800 mb-4">Available Slots</h3>
-           
-           {slots.length === 0 ? (
-             <p className="text-gray-500 italic">No slots available for this date.</p>
-           ) : (
-             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-               {slots.map(slot => (
-                 <button
-                   key={slot.id}
-                   disabled={slot.isBooked} // Disable button if booked
-                   onClick={() => setSelectedSlot(slot)}
-                   className={`
-                     py-2 px-1 rounded-lg text-sm font-semibold transition-all border
-                     ${slot.isBooked 
-                        ? 'bg-red-50 text-red-400 border-red-100 cursor-not-allowed line-through opacity-70' // BOOKED STYLE
-                        : selectedSlot?.id === slot.id
-                          ? 'bg-[#0b3b5e] text-white border-[#0b3b5e] shadow-md transform scale-105' // SELECTED STYLE
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-[#0b3b5e] hover:text-[#0b3b5e]' // AVAILABLE STYLE
-                     }
-                   `}
-                 >
-                   {slot.time}
-                 </button>
-               ))}
-             </div>
-           )}
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center py-12">
+                <Loader />
+              </div>
+            ) : slots.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
+                <span className="text-4xl mb-2">😴</span>
+                <p>No slots available for this date.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 content-start">
+                {slots.map((slot) => {
+                  const isSelected = selectedSlot?.id === slot.id;
+                  const isFree = slot.paymentMode === 'FREE';
 
-           {/* Legend */}
-           <div className="flex gap-4 mt-6 text-xs text-gray-500">
-              <div className="flex items-center gap-1"><div className="w-3 h-3 border rounded bg-white"></div> Available</div>
-              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#0b3b5e]"></div> Selected</div>
-              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-50 border border-red-100"></div> Booked</div>
-           </div>
+                  return (
+                    <button
+                      key={slot.id}
+                      disabled={slot.isBooked}
+                      onClick={() => setSelectedSlot(slot)}
+                      className={`
+                        relative py-3 px-2 rounded-xl text-sm font-bold transition-all duration-200 border flex flex-col items-center justify-center gap-1
+                        ${
+                          slot.isBooked
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed decoration-gray-300 line-through'
+                            : isSelected
+                            ? 'bg-[#003366] text-white border-[#003366] shadow-lg transform scale-105 ring-2 ring-blue-200 ring-offset-1'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50'
+                        }
+                      `}
+                    >
+                      <span>{slot.time}</span>
+                      {!slot.isBooked && (
+                        <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
+                          {isFree ? 'Free' : formatPrice(slot.price)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-           <button 
-             onClick={handleBookNow}
-             disabled={!selectedSlot}
-             className="w-full mt-8 py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-200"
-           >
-             {token ? 'Confirm Booking' : 'Login to Book Appointment'}
-           </button>
+            <div className="mt-auto pt-8">
+              {selectedSlot ? (
+                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-lg">
+                      ✓
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-800 font-bold">Slot Selected</p>
+                      <p className="text-xs text-green-600">
+                        {selectedDate.toLocaleDateString()} at {selectedSlot.time}
+                      </p>
+                      <p className="text-xs text-green-700 font-semibold mt-1">
+                        {selectedSlot.paymentMode === 'FREE'
+                          ? '✨ Free Consultation'
+                          : `${formatPrice(selectedSlot.price)} (${selectedSlot.paymentMode === 'OFFLINE' ? 'Pay at Clinic' : 'Pay Online'})`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleBookNow}
+                    disabled={bookingLoading}
+                    className="w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-md transition-transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {token
+                      ? bookingLoading
+                        ? 'Processing...'
+                        : selectedSlot.paymentMode === 'ONLINE' ? 'Pay & Book' : 'Confirm Booking'
+                      : 'Login to Confirm'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-center text-gray-400 text-sm">
+                  Select a time slot above to proceed.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </UserLayout>

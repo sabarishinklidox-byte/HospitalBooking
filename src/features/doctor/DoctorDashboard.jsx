@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import DoctorLayout from '../../layouts/DoctorLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function DoctorDashboard() {
   const [stats, setStats] = useState({
@@ -13,21 +14,20 @@ export default function DoctorDashboard() {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Call the new endpoint
-        const res = await api.get('/doctor/dashboard-stats');
-        setStats(res.data);
-      } catch (err) {
-        console.error('Failed to load dashboard stats', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+ useEffect(() => {
+  const fetchStats = async () => {
+    try {
+      const res = await api.get(ENDPOINTS.DOCTOR.DASHBOARD_STATS);
+      setStats(res.data);
+    } catch (err) {
+      console.error('Failed to load dashboard stats', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchStats();
-  }, []);
+  fetchStats();
+}, []);
 
   if (loading) return <DoctorLayout><Loader /></DoctorLayout>;
 

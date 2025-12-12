@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function PatientHistoryPage() {
   const { userId } = useParams();
@@ -12,23 +13,23 @@ export default function PatientHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchHistory = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const res = await api.get(`/admin/patients/${userId}/history`);
-      setPatient(res.data.user);
-      setAppointments(res.data.appointments || []);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load patient history');
-    } finally {
-      setLoading(false);
-    }
-  };
+ const fetchHistory = async () => {
+  try {
+    setLoading(true);
+    setError('');
+    const res = await api.get(ENDPOINTS.ADMIN.PATIENT_HISTORY(userId));
+    setPatient(res.data.user);
+    setAppointments(res.data.appointments || []);
+  } catch (err) {
+    setError(err.response?.data?.error || 'Failed to load patient history');
+  } finally {
+    setLoading(false);
+  }
+};
 
-  useEffect(() => {
-    fetchHistory();
-  }, [userId]);
+useEffect(() => {
+  fetchHistory();
+}, [userId]);
 
   return (
     <ClinicAdminLayout>

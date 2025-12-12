@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState([]);
@@ -18,60 +19,62 @@ export default function PaymentsPage() {
     doctorId: '',
     status: '',
   });
+const fetchDoctors = async () => {
+  try {
+    const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
+    setDoctors(res.data || []);
+  } catch (err) {
+    setError(err.response?.data?.error || 'Failed to load doctors');
+  }
+};
 
-  const fetchDoctors = async () => {
-    try {
-      const res = await api.get('/admin/doctors');
-      setDoctors(res.data || []);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load doctors');
-    }
-  };
+// load payments list
+const fetchPayments = async () => {
+  try {
+    setLoading(true);
+    setError('');
+    const res = await api.get(ENDPOINTS.ADMIN.PAYMENTS, {
+      params: {
+        start: filters.start || undefined,
+        end: filters.end || undefined,
+        doctorId: filters.doctorId || undefined,
+        status: filters.status || undefined,
+      },
+    });
+    setPayments(res.data || []);
+  } catch (err) {
+    setError(err.response?.data?.error || 'Failed to load payments');
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const fetchPayments = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const res = await api.get('/admin/payments', {
-        params: {
-          start: filters.start || undefined,
-          end: filters.end || undefined,
-          doctorId: filters.doctorId || undefined,
-          status: filters.status || undefined,
-        },
-      });
-      setPayments(res.data || []);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load payments');
-    } finally {
-      setLoading(false);
-    }
-  };
+// load payments summary
+const fetchSummary = async () => {
+  try {
+    setSummaryLoading(true);
+    const res = await api.get(ENDPOINTS.ADMIN.PAYMENTS_SUMMARY, {
+      params: {
+        start: filters.start || undefined,
+        end: filters.end || undefined,
+      },
+    });
+    setSummary(res.data || { totalRevenue: 0, revenuePerDoctor: [] });
+  } catch (err) {
+    setError(
+      err.response?.data?.error || 'Failed to load payments summary'
+    );
+  } finally {
+    setSummaryLoading(false);
+  }
+};
 
-  const fetchSummary = async () => {
-    try {
-      setSummaryLoading(true);
-      const res = await api.get('/admin/payments/summary', {
-        params: {
-          start: filters.start || undefined,
-          end: filters.end || undefined,
-        },
-      });
-      setSummary(res.data || { totalRevenue: 0, revenuePerDoctor: [] });
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load payments summary');
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDoctors();
-    fetchPayments();
-    fetchSummary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+useEffect(() => {
+  fetchDoctors();
+  fetchPayments();
+  fetchSummary();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
   const handleFilterChange = (e) =>
     setFilters({ ...filters, [e.target.name]: e.target.value });
 

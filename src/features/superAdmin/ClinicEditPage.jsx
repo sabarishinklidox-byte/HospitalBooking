@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../lib/api';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
+import { toast } from 'react-hot-toast'; 
+import { ENDPOINTS } from '../../lib/endpoints';
 
 const INITIAL_FORM = {
   name: '',
@@ -23,61 +25,71 @@ export default function ClinicEditPage() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
 
- const fetchClinic = async () => {
-  try {
-    setLoading(true);
-    const res = await api.get(`/super-admin/clinics/${id}`);
-    const clinic = res.data;
-    if (!clinic) {
-      setError('Clinic not found');
+  const fetchClinic = async () => {
+    try {
+      setLoading(true);
+      // FIX: Use the correct endpoint function: CLINIC_BY_ID(id)
+      const res = await api.get(ENDPOINTS.SUPER_ADMIN.CLINIC_BY_ID(id)); 
+      const clinic = res.data;
+
+      if (!clinic) {
+        toast.error('Clinic not found');
+        navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
+        return;
+      }
+
+      setForm({
+        name: clinic.name || '',
+        address: clinic.address || '',
+        city: clinic.city || '',
+        pincode: clinic.pincode || '',
+        accountNumber: clinic.accountNumber || '',
+        ifscCode: clinic.ifscCode || '',
+        bankName: clinic.bankName || '',
+        // Ensure timings is converted back to a string for the input field
+        timings:
+          typeof clinic.timings === 'object'
+            ? JSON.stringify(clinic.timings)
+            : clinic.timings || '',
+        details: clinic.details || '',
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load clinic');
+      navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchClinic();
+  }, [id]);
+
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+
+    if (!form.name || !form.address || !form.city || !form.pincode) {
+      toast.error('Name, address, city, and pincode are required');
+      setSaving(false);
       return;
     }
-    setForm({
-      name: clinic.name || '',
-      address: clinic.address || '',
-      city: clinic.city || '',
-      pincode: clinic.pincode || '',
-      accountNumber: clinic.accountNumber || '',
-      ifscCode: clinic.ifscCode || '',
-      bankName: clinic.bankName || '',
-      timings: clinic.timings || '',
-      details: clinic.details || '',
-    });
-  } catch (err) {
-    setError(err.response?.data?.error || 'Failed to load clinic');
-  } finally {
-    setLoading(false);
-  }
-};
 
-useEffect(() => {
-  fetchClinic();
-}, [id]);
+    try {
+      // FIX: Use the correct endpoint function for PATCH as well
+      await api.patch(ENDPOINTS.SUPER_ADMIN.CLINIC_BY_ID(id), form);
+      toast.success('Clinic updated successfully!');
+      navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update clinic');
+      setSaving(false);
+    }
+  };
 
-const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setSaving(true);
-
-  if (!form.name || !form.address || !form.city || !form.pincode) {
-    setError('Name, address, city, and pincode are required');
-    setSaving(false);
-    return;
-  }
-
-  try {
-    await api.patch(`/super-admin/clinics/${id}`, form);
-    navigate('/super-admin/clinics'); // back to clinics list
-  } catch (err) {
-    setError(err.response?.data?.error || 'Failed to update clinic');
-    setSaving(false);
-  }
-};
 
   if (loading) return (
     <SuperAdminLayout>
@@ -87,60 +99,87 @@ const handleSubmit = async (e) => {
 
   return (
     <SuperAdminLayout>
-      <h1 className="text-3xl font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
-        Edit Clinic
-      </h1>
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6 text-gray-800">
+          Edit Clinic
+        </h1>
 
-      {error && (
-        <p className="mb-4 text-sm text-red-600">{error}</p>
-      )}
+        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Basic Info */}
+            <div className="md:col-span-2 border-b pb-2 mb-2">
+              <h3 className="text-lg font-semibold text-gray-700">Basic Information</h3>
+            </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg max-w-4xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Clinic Name*</label>
-            <input name="name" className="input" value={form.name} onChange={handleChange} required />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">City*</label>
-            <input name="city" className="input" value={form.city} onChange={handleChange} required />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Address*</label>
-            <input name="address" className="input" value={form.address} onChange={handleChange} required />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Pincode*</label>
-            <input name="pincode" className="input" value={form.pincode} onChange={handleChange} required />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Account Number</label>
-            <input name="accountNumber" className="input" value={form.accountNumber} onChange={handleChange} />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">IFSC Code</label>
-            <input name="ifscCode" className="input" value={form.ifscCode} onChange={handleChange} />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Bank Name</label>
-            <input name="bankName" className="input" value={form.bankName} onChange={handleChange} />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-700">Timings</label>
-            <input name="timings" className="input" value={form.timings} onChange={handleChange} placeholder="Mon–Fri 9AM–6PM" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block mb-1 font-medium text-gray-700">Details</label>
-            <textarea name="details" className="input" rows={3} value={form.details} onChange={handleChange} placeholder="Brief description" />
-          </div>
-        </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Clinic Name*</label>
+              <input name="name" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.name} onChange={handleChange} required />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">City*</label>
+              <input name="city" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.city} onChange={handleChange} required />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Address*</label>
+              <input name="address" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.address} onChange={handleChange} required />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Pincode*</label>
+              <input name="pincode" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.pincode} onChange={handleChange} required />
+            </div>
 
-        <div className="mt-6">
-          <button type="submit" disabled={saving} className="btn-primary w-full py-3 font-semibold">
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      </form>
+            {/* Bank Details */}
+            <div className="md:col-span-2 border-b pb-2 mb-2 mt-4">
+              <h3 className="text-lg font-semibold text-gray-700">Bank Details (Optional)</h3>
+            </div>
+
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Account Number</label>
+              <input name="accountNumber" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.accountNumber} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">IFSC Code</label>
+              <input name="ifscCode" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.ifscCode} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Bank Name</label>
+              <input name="bankName" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.bankName} onChange={handleChange} />
+            </div>
+
+            {/* Extra Info */}
+            <div className="md:col-span-2 border-b pb-2 mb-2 mt-4">
+              <h3 className="text-lg font-semibold text-gray-700">Additional Info</h3>
+            </div>
+
+            <div>
+              <label className="block mb-1 font-medium text-gray-700">Timings</label>
+              <input name="timings" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.timings} onChange={handleChange} placeholder="Mon–Fri 9AM–6PM" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block mb-1 font-medium text-gray-700">Details</label>
+              <textarea name="details" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" rows={3} value={form.details} onChange={handleChange} placeholder="Brief description" />
+            </div>
+          </div>
+
+          <div className="mt-8 flex gap-4">
+            <button 
+              type="button" 
+              onClick={() => navigate('/super-admin/clinics')}
+              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              disabled={saving} 
+              className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md transition-all disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
     </SuperAdminLayout>
   );
 }
