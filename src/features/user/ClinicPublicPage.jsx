@@ -35,6 +35,8 @@ export default function ClinicPublicPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!clinicId) return;
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -60,6 +62,7 @@ export default function ClinicPublicPage() {
         <Loader />
       </UserLayout>
     );
+
   if (error)
     return (
       <UserLayout>
@@ -68,6 +71,7 @@ export default function ClinicPublicPage() {
         </div>
       </UserLayout>
     );
+
   if (!clinic) return null;
 
   const bannerSrc = toFullUrl(clinic.banner) || DEFAULT_BANNER;
@@ -82,7 +86,6 @@ export default function ClinicPublicPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Clinic banner + logo header */}
         <div className="relative w-full mb-10">
-          {/* Banner */}
           <div className="relative rounded-2xl overflow-hidden shadow-xl h-64 sm:h-80 w-full">
             <img
               src={bannerSrc}
@@ -95,7 +98,6 @@ export default function ClinicPublicPage() {
             <div className="absolute inset-0 bg-gray-900/40" />
           </div>
 
-          {/* Floating info card */}
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[-80px] w-[95%] sm:w-[90%] md:w-full max-w-4xl bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100 flex items-center space-x-6">
             {/* Logo */}
             <div className="w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0 bg-gray-50 p-2 rounded-2xl shadow-md border-4 border-white">
@@ -112,10 +114,32 @@ export default function ClinicPublicPage() {
             {/* Clinic details */}
             <div className="flex-1 min-w-0">
               <h1
-                className="text-2xl md:text-3xl font-extrabold truncate"
+                className="text-2xl md:text-3xl font-extrabold truncate flex items-center gap-3 flex-wrap"
                 style={stylePrimaryText}
               >
                 {clinic.name}
+
+                {clinic.googleRating && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">
+                    ⭐ {Number(clinic.googleRating).toFixed(1)} / 5
+                    {typeof clinic.googleTotalReviews === 'number' && (
+                      <span className="ml-1">
+                        ({clinic.googleTotalReviews} reviews)
+                      </span>
+                    )}
+                  </span>
+                )}
+
+                {clinic.googleRatingUrl && (
+                  <a
+                    href={clinic.googleRatingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-blue-600 underline underline-offset-2"
+                  >
+                    Write a Google review
+                  </a>
+                )}
               </h1>
 
               <p className="flex items-center gap-2 text-sm text-gray-600 mb-2 font-medium">
@@ -204,7 +228,6 @@ export default function ClinicPublicPage() {
                       key={doctor.id}
                       className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex flex-col items-center text-center transition-all hover:shadow-xl group"
                     >
-                      {/* Avatar */}
                       <div className="w-28 h-28 rounded-full bg-gray-100 mb-4 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
                         {avatarUrl ? (
                           <img
@@ -225,7 +248,6 @@ export default function ClinicPublicPage() {
                         </span>
                       </div>
 
-                      {/* Info */}
                       <h3
                         className="font-extrabold text-xl text-gray-900 transition-colors"
                         style={stylePrimaryText}
@@ -242,7 +264,6 @@ export default function ClinicPublicPage() {
                         {doctor.experience} Yrs Experience
                       </p>
 
-                      {/* Ratings */}
                       <div className="flex items-center gap-1.5 mb-5 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-100">
                         <svg
                           className="w-4 h-4 text-yellow-500"
@@ -259,7 +280,6 @@ export default function ClinicPublicPage() {
                         </span>
                       </div>
 
-                      {/* Booking button */}
                       <Link
                         to={`/doctors/${doctor.id}/book`}
                         state={{ doctor: { ...doctor, clinicId: clinic.id } }}

@@ -190,20 +190,7 @@ html, body {
   background-color: var(--color-action-dark);
   transform: translateY(-2px);
 }
-/* =========================================
-   🌌 ALIGNMENT FIXED - DARK NAVY CALENDAR
-   ========================================= */
 
-//* =========================================
-   ✨ CLEAN MEDICAL CALENDAR (Fixed Size & Colors)
-   ========================================= */
-
-/* 1. Main Container - Remove fixed width/height issues */
-/* =========================================
-   ✨ CLEAN & ELEGANT CALENDAR (Final Fix)
-   ========================================= */
-
-/* 1. Main Container - fits perfectly in the white card */
 .react-datepicker {
   font-family: 'Inter', system-ui, sans-serif !important;
   border: none !important;

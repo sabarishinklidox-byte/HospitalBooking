@@ -1,6 +1,5 @@
 // src/features/user/LandingPage.jsx
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import api from "../../lib/api";
 import UserLayout from "../../layouts/UserLayout.jsx";
 import Loader from "../../components/Loader.jsx";
@@ -44,7 +43,6 @@ export default function LandingPage() {
       setLoading(true);
       try {
         const res = await api.get(ENDPOINTS.PUBLIC.CLINICS);
-     
         setClinics(res.data);
         if (Array.isArray(res.data) && res.data.length > 0) {
           setSelectedClinic(res.data[0]);
@@ -133,6 +131,9 @@ export default function LandingPage() {
                 const logoSrc =
                   toFullUrl(clinic.logo || clinic.logoUrl) || DEFAULT_LOGO;
 
+                // Google rating URL from backend (Google Maps rating page)
+                const ratingUrl = clinic.googleMapsUrl || null;
+
                 return (
                   <button
                     key={clinic.id}
@@ -160,7 +161,7 @@ export default function LandingPage() {
                         } transition-colors`}
                       ></div>
                       {isSelected && (
-                        <div className="absolute top-4 right-4 bg-white text-[#003366] rounded-full p-2 shadow-xl">
+                        <div className="absolute top-4 right-4 bg-white text-[#00366] rounded-full p-2 shadow-xl">
                           <svg
                             className="w-6 h-6"
                             fill="none"
@@ -196,12 +197,64 @@ export default function LandingPage() {
 
                       <div className="mt-8">
                         <h3
-                          className={`font-extrabold text-2xl mb-2 ${
+                          className={`font-extrabold text-2xl mb-1 ${
                             isSelected ? "text-white" : "text-gray-900"
                           }`}
                         >
                           {clinic.name}
                         </h3>
+
+                        {/* Rating + reviews + write link */}
+                        {(clinic.googleRating || ratingUrl) && (
+                          <div className="flex items-center gap-2 mb-3">
+                            {clinic.googleRating && (
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">
+                                <span className="mr-1">⭐</span>
+                                <span>
+                                  {Number(clinic.googleRating).toFixed(1)} / 5
+                                </span>
+                                {typeof clinic.googleTotalReviews ===
+                                  "number" && (
+                                  <span className="ml-1">
+                                    ({clinic.googleTotalReviews} reviews)
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {ratingUrl && (
+                              <span
+                                role="link"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(
+                                    ratingUrl,
+                                    "_blank",
+                                    "noopener"
+                                  );
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    window.open(
+                                      ratingUrl,
+                                      "_blank",
+                                      "noopener"
+                                    );
+                                  }
+                                }}
+                                className={`text-[11px] font-semibold underline underline-offset-2 cursor-pointer ${
+                                  isSelected ? "text-blue-200" : "text-blue-600"
+                                }`}
+                                title="Write review on Google"
+                              >
+                                Write review on Google
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         <p
                           className={`text-sm flex items-start gap-2 mb-4 ${
@@ -367,19 +420,16 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <Link
-                  to={`/doctors/${doctor.id}/book`}
-                  state={{
-                    doctor: { ...doctor, clinicId: selectedClinic?.id },
-                  }}
-                  className="w-full py-3 bg-[#0056b3] text-white rounded-xl font-bold text-lg hover:bg-[#00408f] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                <a
+                  href={`/doctors/${doctor.id}/book`}
+                  className="w-full py-3 bg-[#0056b3] text-white rounded-xl font-bold text-lg hover:bg-[#00408f] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center"
                   style={{
                     backgroundColor: PRIMARY_COLOR,
                     transition: "transform 0.3s, background-color 0.3s",
                   }}
                 >
                   Book Appointment
-                </Link>
+                </a>
               </div>
             ))}
           </div>

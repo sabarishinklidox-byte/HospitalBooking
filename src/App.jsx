@@ -1,7 +1,7 @@
 import React from 'react';
 import { Provider, useSelector } from 'react-redux';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast'; 
+import { Toaster } from 'react-hot-toast';
 import { store } from './store';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -21,6 +21,7 @@ import ClinicEditPage from './features/superAdmin/ClinicEditPage.jsx';
 import ClinicAdminsPage from './features/superAdmin/ClinicAdminsPage.jsx';
 import EditClinicAdminPage from './features/superAdmin/EditClinicAdminPage.jsx';
 import SuperAdminAnalyticsPage from './features/superAdmin/SuperAdminAnalyticsPage.jsx';
+import PlansPage from './features/superAdmin/PlansPage.jsx';
 
 // --- CLINIC ADMIN ---
 import ClinicAdminDashboard from './features/clinicAdmin/ClinicAdminDashboard.jsx';
@@ -34,6 +35,8 @@ import ReviewsPage from './features/clinicAdmin/ReviewsPage.jsx';
 import AuditLogsPage from './features/clinicAdmin/AuditLogsPage.jsx';
 import ClinicAdminBookingsAnalyticsPage from './features/clinicAdmin/ClinicAdminBookingsAnalyticsPage.jsx';
 import ClinicAdminSlotsUsagePage from './features/clinicAdmin/ClinicAdminSlotsUsagePage.jsx';
+import BillingPage from './features/clinicAdmin/BillingPage.jsx';
+import ClinicAppointmentsPage from './features/clinicAdmin/ClinicAppointmentsPage.jsx';
 
 // --- DOCTOR ---
 import DoctorDashboard from './features/doctor/DoctorDashboard.jsx';
@@ -48,11 +51,16 @@ import MyAppointmentsPage from './features/user/MyAppointmentsPage.jsx';
 import UserProfilePage from './features/user/UserProfilePage.jsx';
 import ClinicPublicPage from './features/user/ClinicPublicPage.jsx';
 
-// ✅ IMPORT PAYMENT SUCCESS PAGE
+// ✅ PAYMENT SUCCESS
 import PaymentSuccessPage from './features/payment/PaymentSuccessPage.jsx';
 
 // --- COMPONENTS ---
 import Loader from './components/Loader.jsx';
+import OrganizationRegisterPage from './features/public/OrganizationRegisterPage.jsx';
+import PricingPage from './features/public/PricingPage.jsx';
+
+// ✅ NEW: Admin context
+import { AdminProvider } from './context/AdminContext.jsx';
 
 // ---------- GUARD COMPONENT ----------
 function RequireRole({ allowedRoles, children }) {
@@ -77,7 +85,7 @@ function RequireRole({ allowedRoles, children }) {
     } else if (location.pathname.startsWith('/doctor')) {
       redirectPath = '/doctor/login';
     } else if (location.pathname.startsWith('/admin')) {
-      redirectPath = '/admin/login'; 
+      redirectPath = '/admin/login';
     }
 
     return <Navigate to={redirectPath} state={{ from: location }} replace />;
@@ -111,7 +119,8 @@ function AppContent() {
             padding: '10px 14px',
             background: '#ffffff',
             color: '#1f2933',
-            boxShadow: '0 10px 15px -3px rgba(15, 23, 42, 0.15), 0 4px 6px -4px rgba(15, 23, 42, 0.12)',
+            boxShadow:
+              '0 10px 15px -3px rgba(15, 23, 42, 0.15), 0 4px 6px -4px rgba(15, 23, 42, 0.12)',
           },
           success: {
             duration: 2500,
@@ -129,11 +138,13 @@ function AppContent() {
       <Routes>
         {/* PUBLIC ROUTES */}
         <Route path="/" element={<LandingPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/doctors/:doctorId/book" element={<UserBookingPage />} />
         <Route path="/login" element={<UserLogin />} />
         <Route path="/signup" element={<UserSignup />} />
         <Route path="/visit/:clinicId" element={<ClinicPublicPage />} />
-        
+        <Route path="/register" element={<OrganizationRegisterPage />} />
+
         {/* LOGIN ROUTES */}
         <Route path="/super-admin/login" element={<SuperAdminLogin />} />
         <Route path="/doctor/login" element={<DoctorLogin />} />
@@ -141,43 +152,166 @@ function AppContent() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* ✅ PAYMENT SUCCESS ROUTE (Must be accessible) */}
+        {/* PAYMENT SUCCESS */}
         <Route path="/payment/success" element={<PaymentSuccessPage />} />
 
-        {/* ================= SUPER ADMIN ROUTES ================= */}
-        <Route path="/super-admin/dashboard" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><SuperAdminDashboard /></RequireRole>} />
-        <Route path="/super-admin/clinics" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><ClinicsPage /></RequireRole>} />
-        <Route path="/super-admin/clinics/:id/edit" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><ClinicEditPage /></RequireRole>} />
-        <Route path="/super-admin/admins" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><ClinicAdminsPage /></RequireRole>} />
-        <Route path="/super-admin/admins/:id/edit" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><EditClinicAdminPage /></RequireRole>} />
-        <Route path="/super-admin/audit-logs" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><AuditLogsPage apiUrl="/super-admin/audit-logs" /></RequireRole>} />
-        <Route path="/super-admin/analytics" element={<RequireRole allowedRoles={['SUPER_ADMIN']}><SuperAdminAnalyticsPage /></RequireRole>} />
+        {/* SUPER ADMIN ROUTES */}
+        <Route
+          path="/super-admin/dashboard"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <SuperAdminDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/clinics"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <ClinicsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/clinics/:id/edit"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <ClinicEditPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/admins"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <ClinicAdminsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/admins/:id/edit"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <EditClinicAdminPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/audit-logs"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <AuditLogsPage apiUrl="/super-admin/audit-logs" />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/analytics"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <SuperAdminAnalyticsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/super-admin/plans"
+          element={
+            <RequireRole allowedRoles={['SUPER_ADMIN']}>
+              <PlansPage />
+            </RequireRole>
+          }
+        />
 
-        {/* ================= DOCTOR ROUTES ================= */}
-        <Route path="/doctor/dashboard" element={<RequireRole allowedRoles={['DOCTOR']}><DoctorDashboard /></RequireRole>} />
-        <Route path="/doctor/appointments" element={<RequireRole allowedRoles={['DOCTOR']}><DoctorAppointmentsPage /></RequireRole>} />
-        <Route path="/doctor/profile" element={<RequireRole allowedRoles={['DOCTOR']}><DoctorProfilePage /></RequireRole>} />
-        <Route path="/doctor/reviews" element={<RequireRole allowedRoles={['DOCTOR']}><MyReviewsPage /></RequireRole>} />
+        {/* DOCTOR ROUTES */}
+        <Route
+          path="/doctor/dashboard"
+          element={
+            <RequireRole allowedRoles={['DOCTOR']}>
+              <DoctorDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/doctor/appointments"
+          element={
+            <RequireRole allowedRoles={['DOCTOR']}>
+              <DoctorAppointmentsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/doctor/profile"
+          element={
+            <RequireRole allowedRoles={['DOCTOR']}>
+              <DoctorProfilePage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/doctor/reviews"
+          element={
+            <RequireRole allowedRoles={['DOCTOR']}>
+              <MyReviewsPage />
+            </RequireRole>
+          }
+        />
 
-        {/* ================= CLINIC ADMIN ROUTES ================= */}
-        <Route path="/admin/dashboard" element={<RequireRole allowedRoles={['ADMIN']}><ClinicAdminDashboard /></RequireRole>} />
-        <Route path="/admin/bookings" element={<RequireRole allowedRoles={['ADMIN']}><BookingsPage /></RequireRole>} />
-        <Route path="/admin/slots" element={<RequireRole allowedRoles={['ADMIN']}><SlotsPage /></RequireRole>} />
-        <Route path="/admin/doctors" element={<RequireRole allowedRoles={['ADMIN']}><DoctorsPage /></RequireRole>} />
-        <Route path="/admin/payments" element={<RequireRole allowedRoles={['ADMIN']}><PaymentsPage /></RequireRole>} />
-        <Route path="/admin/settings" element={<RequireRole allowedRoles={['ADMIN']}><ClinicSettingsPage /></RequireRole>} />
-        <Route path="/admin/patients/:userId/history" element={<RequireRole allowedRoles={['ADMIN']}><PatientHistoryPage /></RequireRole>} />
-        <Route path="/admin/reviews" element={<RequireRole allowedRoles={['ADMIN']}><ReviewsPage /></RequireRole>} />
-        <Route path="/admin/audit-logs" element={<RequireRole allowedRoles={['ADMIN']}><AuditLogsPage apiUrl="/admin/audit-logs" /></RequireRole>} />
-        
-        <Route path="/admin/analytics/slots-usage" element={<RequireRole allowedRoles={['ADMIN']}><ClinicAdminSlotsUsagePage /></RequireRole>} />
-        <Route path="/admin/analytics/bookings" element={<RequireRole allowedRoles={['ADMIN']}><ClinicAdminBookingsAnalyticsPage /></RequireRole>} />
+        {/* ✅ CLINIC ADMIN ROUTES WRAPPED WITH ADMIN PROVIDER */}
+        <Route
+          path="/admin/*"
+          element={
+            <RequireRole allowedRoles={['ADMIN']}>
+              <AdminProvider>
+                <Routes>
+                  <Route path="dashboard" element={<ClinicAdminDashboard />} />
+                  <Route path="bookings" element={<BookingsPage />} />
+                  <Route path="slots" element={<SlotsPage />} />
+                  <Route path="doctors" element={<DoctorsPage />} />
+                  <Route path="payments" element={<PaymentsPage />} />
+                  <Route path="settings" element={<ClinicSettingsPage />} />
+                  <Route
+                    path="patients/:userId/history"
+                    element={<PatientHistoryPage />}
+                  />
+                   <Route path="appointments" element={<ClinicAppointmentsPage />} />
+                  <Route path="reviews" element={<ReviewsPage />} />
+                  <Route
+                    path="audit-logs"
+                    element={<AuditLogsPage apiUrl="/admin/audit-logs" />}
+                  />
+                  <Route
+                    path="analytics/slots-usage"
+                    element={<ClinicAdminSlotsUsagePage />}
+                  />
+                  <Route
+                    path="analytics/bookings"
+                    element={<ClinicAdminBookingsAnalyticsPage />}
+                  />
+                  <Route path="billing" element={<BillingPage />} />
+                </Routes>
+              </AdminProvider>
+            </RequireRole>
+          }
+        />
 
-        {/* ================= PROTECTED USER ROUTES ================= */}
-        <Route path="/my-appointments" element={<RequireRole allowedRoles={['USER']}><MyAppointmentsPage /></RequireRole>} />
-        <Route path="/profile" element={<RequireRole allowedRoles={['USER']}><UserProfilePage /></RequireRole>} />
+        {/* PROTECTED USER ROUTES */}
+        <Route
+          path="/my-appointments"
+          element={
+            <RequireRole allowedRoles={['USER']}>
+              <MyAppointmentsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireRole allowedRoles={['USER']}>
+              <UserProfilePage />
+            </RequireRole>
+          }
+        />
 
-        {/* FALLBACK */}
+        {/* 404 */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

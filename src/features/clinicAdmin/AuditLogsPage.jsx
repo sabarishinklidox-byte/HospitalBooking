@@ -1,3 +1,4 @@
+// src/features/shared/AuditLogsPage.jsx
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../../lib/api.js';
@@ -5,6 +6,10 @@ import Loader from '../../components/Loader.jsx';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout.jsx';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
 import { ENDPOINTS } from '../../lib/endpoints';
+import { useAdminContext } from '../../context/AdminContext.jsx';
+import UpgradeNotice from '../../components/UpgradeNotice.jsx';
+
+// ---------------- helpers ----------------
 
 const formatDetails = (details) => {
   if (!details || Object.keys(details).length === 0) {
@@ -85,8 +90,11 @@ const getActionBadge = (action) => {
   );
 };
 
+// ---------------- main page ----------------
+
 export default function AuditLogsPage() {
   const { user } = useSelector((state) => state.auth);
+
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -102,14 +110,18 @@ export default function AuditLogsPage() {
     role: '',
   });
 
+  // layout based on role
   const Layout = user?.role === 'ADMIN' ? ClinicAdminLayout : SuperAdminLayout;
+
+  // plan only relevant for clinic admins
+  const adminCtx = user?.role === 'ADMIN' ? useAdminContext() : null;
+  const plan = adminCtx?.plan || null;
+  const planLoading = adminCtx?.loading || false;
 
   const fetchLogs = async (page = 1) => {
     setLoading(true);
     try {
-      const endpoint = ENDPOINTS.ADMIN.AUDIT_LOGS;
-
-      const res = await api.get(endpoint, {
+      const res = await api.get(ENDPOINTS.ADMIN.AUDIT_LOGS, {
         params: {
           page,
           limit: 12,
@@ -118,7 +130,6 @@ export default function AuditLogsPage() {
           role: filters.role || undefined,
         },
       });
-
 
       const list = Array.isArray(res.data)
         ? res.data
@@ -164,7 +175,7 @@ export default function AuditLogsPage() {
     setFilters({ startDate: '', endDate: '', role: '' });
   };
 
-  if (error)
+  if (error) {
     return (
       <Layout>
         <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -175,7 +186,37 @@ export default function AuditLogsPage() {
         </div>
       </Layout>
     );
+  }
 
+  // only clinic admins depend on plan loading
+  if (user?.role === 'ADMIN' && planLoading) {
+    return (
+      <Layout>
+        <div className="py-20">
+          <Loader />
+        </div>
+      </Layout>
+    );
+  }
+
+  // low plan → show upgrade instead of logs (only for clinic admins)
+  if (user?.role === 'ADMIN' && !plan?.enableAuditLogs) {
+    return (
+      <Layout>
+        <div className="max-w-4xl mx-auto p-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="text-2xl">📜</span> Audit Logs
+          </h1>
+          <UpgradeNotice
+            feature="Audit logs & activity history"
+            planName={plan?.name}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
+  // SUPER_ADMIN (and any non-plan-gated roles) always reach here
   return (
     <Layout>
       <div className="max-w-7xl mx-auto p-6">
@@ -295,9 +336,7 @@ export default function AuditLogsPage() {
                       {getActionBadge(log.action)}
                     </div>
 
-                    <div className="flex-1 w-full">
-                      {formatDetails(log.details)}
-                    </div>
+                    <div className="flex-1 w-full">{formatDetails(log.details)}</div>
                   </div>
                 ))
               )}

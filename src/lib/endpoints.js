@@ -4,6 +4,7 @@ export const ENDPOINTS = {
     CREATE_CHECKOUT_SESSION: '/payment/create-checkout-session',
     VERIFY_SESSION: '/payment/verify-session',
   },
+
   PUBLIC: {
     CLINICS: '/public/clinics',
     CLINIC_BY_ID: (id) => `/public/clinics/${id}`,
@@ -12,6 +13,9 @@ export const ENDPOINTS = {
     DOCTOR_SLOTS: (doctorId) => `/public/doctors/${doctorId}/slots`,
     FORGOT_PASSWORD: '/public/forgot-password',
     RESET_PASSWORD: '/public/reset-password',
+    PLANS: '/public/plans',
+     GOOGLE_PLACE_ID: "/public/google/place-id",
+     ORGANIZATION_REGISTER: "/public/organizations/register",
   },
 
   USER: {
@@ -57,9 +61,13 @@ export const ENDPOINTS = {
 
     REVIEWS: '/admin/reviews',
     AUDIT_LOGS: '/admin/audit-logs',
+    SUBSCRIPTION_UPGRADE: "/admin/subscription/upgrade",
 
     ANALYTICS_BOOKINGS: '/admin/analytics/bookings',
     ANALYTICS_SLOTS_USAGE: '/admin/analytics/slots-usage',
+    GATEWAY_STRIPE: "/admin/gateway/stripe",
+     CLINIC_GOOGLE_RATING_REFRESH: "/admin/clinic/google-rating/refresh",
+      DOCTOR_SLOTS: (doctorId) => `/admin/doctors/${doctorId}/slots`,
   },
 
   // 🔹 Add this block
@@ -95,6 +103,11 @@ SUPER_ADMIN: {
 
   ANALYTICS: '/super-admin/analytics',
   GLOBAL_BOOKINGS: '/super-admin/analytics/global-bookings',
+     CLINIC_UPLOAD: '/super-admin/clinics/upload',
+         PLANS: '/super-admin/plans',
+          PLAN_BY_ID: (id) => `/super-admin/plans/${id}`,
+            AUDIT_LOGS: '/super-admin/audit-logs',
+          
 }
 
 };

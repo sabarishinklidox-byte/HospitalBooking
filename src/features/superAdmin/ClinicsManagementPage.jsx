@@ -79,34 +79,7 @@ export default function ClinicsManagementPage() {
     }
   };
 
-  const handleCopyLink = async (clinic) => {
-    const link = `${window.location.origin}/visit/${clinic.id}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      toast.success('Clinic link copied!');
-      handleClinicClick(clinic.id);
-    } catch {
-      toast.error('Failed to copy link');
-    }
-  };
-
-  const handleDeleteClinic = async (clinicId) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to permanently delete this clinic?'
-      )
-    )
-      return;
-
-    try {
-      await api.delete(ENDPOINTS.SUPER_ADMIN.CLINIC_BY_ID(clinicId));
-      toast.success('Clinic deleted');
-      fetchClinics();
-    } catch (err) {
-      console.error('Delete failed', err.response?.data || err.message);
-      toast.error(err.response?.data?.error || 'Failed to delete clinic');
-    }
-  };
+  
 
   if (loading) return <Loader />;
 

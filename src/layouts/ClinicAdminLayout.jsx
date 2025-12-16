@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { logout } from '../features/auth/authSlice';
+import { useAdminContext } from '../context/AdminContext.jsx';
 
 export default function ClinicAdminLayout({ children }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const { plan } = useAdminContext() || {};
 
   const handleLogout = () => {
     dispatch(logout());
@@ -41,12 +44,21 @@ export default function ClinicAdminLayout({ children }) {
       >
         <div className="flex flex-col h-full p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white">
                 Clinic Admin
               </h2>
               <p className="text-xs text-blue-200 mt-1">Clinic Dashboard</p>
+              {plan && (
+                <p className="text-[11px] text-blue-100 mt-1">
+                  Plan:{' '}
+                  <span className="font-semibold">
+                    {plan.name || plan.slug || 'Unknown'}
+                  </span>
+                  {plan.version && ` · v${plan.version}`}
+                </p>
+              )}
             </div>
             <button
               onClick={closeSidebar}
@@ -67,6 +79,25 @@ export default function ClinicAdminLayout({ children }) {
               </svg>
             </button>
           </div>
+
+          {/* Optional small pill with key features */}
+          {plan && (
+            <div className="mb-4 inline-flex flex-wrap items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[11px]">
+              <span className="font-semibold">
+                {plan.name || plan.slug || 'Current Plan'}
+              </span>
+              {plan.allowOnlinePayments && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-100">
+                  Online payments
+                </span>
+              )}
+              {plan.enableAuditLogs && (
+                <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-100">
+                  Analytics &amp; history
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Nav links */}
           <nav className="flex-1 space-y-2">
@@ -154,6 +185,7 @@ export default function ClinicAdminLayout({ children }) {
               Doctors
             </NavLink>
 
+            {/* Reviews always visible */}
             <NavLink
               to="/admin/reviews"
               onClick={closeSidebar}
@@ -195,15 +227,30 @@ export default function ClinicAdminLayout({ children }) {
               </svg>
               Settings
             </NavLink>
-<NavLink
-  to="/admin/audit-logs"
+
+            {/* Audit Logs always visible */}
+            <NavLink
+              to="/admin/audit-logs"
+              onClick={closeSidebar}
+              className={navLinkClasses}
+            >
+              <span className="w-5 h-5 inline-flex items-center justify-center rounded-full border border-white/60 text-xs">
+                Ⓛ
+              </span>
+              Audit Logs
+            </NavLink>
+            <NavLink
+  to="/admin/appointments"
   onClick={closeSidebar}
   className={navLinkClasses}
 >
-  {/* icon */} Audit Logs
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3M5 11h14M5 19h14M5 7h14M5 15h14" />
+  </svg>
+  Appointments
 </NavLink>
-<NavLink
-  to="/admin/payments"
+            <NavLink
+  to="/admin/billing"
   onClick={closeSidebar}
   className={navLinkClasses}
 >
@@ -217,58 +264,87 @@ export default function ClinicAdminLayout({ children }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
-      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v2m8-8a8 8 0 11-16 0 8 8 0 0116 0z"
+      d="M3 7h18M3 12h18M7 17h10"
     />
   </svg>
-  Payments
+  Subscription &amp; Billing
 </NavLink>
 
-            {/* Analytics section */}
-            <p className="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wide text-blue-200/80">
-              Analytics
-            </p>
-
-            <NavLink
-              to="/admin/analytics/bookings"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {/* Payments only if online payments allowed */}
+            {plan?.allowOnlinePayments && (
+              <NavLink
+                to="/admin/payments"
+                onClick={closeSidebar}
+                className={navLinkClasses}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 3v18h18M7 15l3-3 3 3 4-6"
-                />
-              </svg>
-              Bookings Analytics
-            </NavLink>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v2m8-8a8 8 0 11-16 0 8 8 0 0116 0z"
+                  />
+                </svg>
+                Payments
+              </NavLink>
+            )}
 
-            <NavLink
-              to="/admin/analytics/slots-usage"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M3 3v18h18M7 17h4M7 13h8M7 9h6"
-                />
-              </svg>
-              Slots Analytics
-            </NavLink>
+            {/* Analytics section still gated if you want */}
+            {plan?.enableAuditLogs && (
+              <>
+                <p className="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wide text-blue-200/80">
+                  Analytics
+                </p>
+
+                <NavLink
+                  to="/admin/analytics/bookings"
+                  onClick={closeSidebar}
+                  className={navLinkClasses}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 3v18h18M7 15l3-3 3 3 4-6"
+                    />
+                  </svg>
+                  Bookings Analytics
+                </NavLink>
+
+                <NavLink
+                  to="/admin/analytics/slots-usage"
+                  onClick={closeSidebar}
+                  className={navLinkClasses}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 3v18h18M7 17h4M7 13h8M7 9h6"
+                    />
+                  </svg>
+                  Slots Analytics
+                </NavLink>
+                
+              </>
+            )}
           </nav>
 
           {/* Logout */}

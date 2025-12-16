@@ -34,7 +34,7 @@ export default function CreateClinicForm({ onCreated }) {
       fd.append('file', file);
 
       // Backend: POST /api/super-admin/clinics/upload
-      const res = await api.post('/super-admin/clinics/upload', fd, {
+      const res = await api.post(ENDPOINTS.SUPER_ADMIN.CLINIC_UPLOAD, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
