@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function AppointmentCard({ app, onReschedule, onReview }) {
+export default function AppointmentCard({ app, onReschedule, onReview, onCancel }) {
   const formatDate = (d) =>
     d
       ? new Date(d).toLocaleDateString(undefined, {
@@ -18,6 +18,40 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
   const latestReschedule = isRescheduled
     ? app.history.find((h) => h.oldDate) || null
     : null;
+
+  // payment mode (FREE / OFFLINE / ONLINE)
+  const isOnlinePay = app.slot?.paymentMode === 'ONLINE';
+
+  // helper for status colors incl. CANCEL_REQUESTED
+  const statusStyles = (() => {
+    switch (app.status) {
+      case 'CONFIRMED':
+        return {
+          badge: 'bg-green-50 text-green-700 border-green-200',
+          dot: 'bg-green-500',
+        };
+      case 'PENDING':
+        return {
+          badge: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+          dot: 'bg-yellow-500',
+        };
+      case 'COMPLETED':
+        return {
+          badge: 'bg-blue-50 text-blue-700 border-blue-200',
+          dot: 'bg-blue-500',
+        };
+      case 'CANCEL_REQUESTED':
+        return {
+          badge: 'bg-orange-50 text-orange-700 border-orange-200',
+          dot: 'bg-orange-500',
+        };
+      default:
+        return {
+          badge: 'bg-red-50 text-red-700 border-red-200',
+          dot: 'bg-red-500',
+        };
+    }
+  })();
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-5 transition-all hover:shadow-md hover:border-blue-300">
@@ -74,33 +108,22 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
           {/* Status */}
           <div className="mt-4">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border uppercase tracking-wider
-              ${
-                app.status === 'CONFIRMED'
-                  ? 'bg-green-50 text-green-700 border-green-200'
-                  : app.status === 'PENDING'
-                  ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                  : app.status === 'COMPLETED'
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : 'bg-red-50 text-red-700 border-red-200'
-              }`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border uppercase tracking-wider ${statusStyles.badge}`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  app.status === 'CONFIRMED'
-                    ? 'bg-green-500'
-                    : app.status === 'PENDING'
-                    ? 'bg-yellow-500'
-                    : app.status === 'COMPLETED'
-                    ? 'bg-blue-500'
-                    : 'bg-red-500'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full ${statusStyles.dot}`}
               ></span>
               {app.status}
             </span>
+
+            {app.status === 'CANCEL_REQUESTED' && (
+              <p className="mt-1 text-xs text-orange-600 font-medium">
+                Cancellation requested. Waiting for clinic approval.
+              </p>
+            )}
           </div>
 
-          {/* Rescheduled chip (from history) */}
+          {/* Rescheduled chip */}
           {latestReschedule && (
             <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800">
               <span>⚠️ Rescheduled</span>
@@ -120,7 +143,9 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
                   d="M14 5l7 7m0 0l-7 7m7-7H3"
                 ></path>
               </svg>
-              <span className="text-gray-900">{latestReschedule.newDate}</span>
+              <span className="text-gray-900">
+                {latestReschedule.newDate}
+              </span>
             </div>
           )}
 
@@ -142,7 +167,7 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
               </svg>
               <div>
                 <p className="text-xs font-bold text-red-700 uppercase tracking-wide">
-                  Cancelled by clinic
+                  Cancelled
                 </p>
                 <p className="text-xs text-red-700 mt-0.5">
                   {app.cancelReason}
@@ -153,7 +178,7 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 self-start md:self-center w-full md:w-auto">
+        <div className="flex flex-col gap-2 self-start md:self-center w-full md:w-auto">
           {['CONFIRMED', 'PENDING'].includes(app.status) && (
             <button
               onClick={() => onReschedule(app)}
@@ -173,6 +198,29 @@ export default function AppointmentCard({ app, onReschedule, onReview }) {
                 ></path>
               </svg>
               Reschedule
+            </button>
+          )}
+
+          {/* Cancel / Request cancel button */}
+          {['CONFIRMED', 'PENDING'].includes(app.status) && (
+            <button
+              onClick={() => onCancel?.(app)}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 border border-red-300 text-red-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors shadow-sm"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              {isOnlinePay ? 'Request cancellation' : 'Cancel appointment'}
             </button>
           )}
 

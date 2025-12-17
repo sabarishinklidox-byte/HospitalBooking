@@ -54,7 +54,12 @@ export const ENDPOINTS = {
     PAYMENTS_SUMMARY: '/admin/payments/summary',
 
     PATIENT_HISTORY: (userId) => `/admin/patients/${userId}/history`,
-
+// ENDPOINTS.ADMIN
+ NOTIFICATIONS: '/admin/notifications',
+NOTIFICATIONS_UNREAD_COUNT: '/admin/notifications/unread-count',
+    NOTIFICATIONS_MARK_ALL_READ: '/admin/notifications/mark-all-read',
+    NOTIFICATIONS_MARK_READ: '/admin/notifications/mark-read',
+NOTIFICATIONS_MARK_READ_BY_ENTITY: '/admin/notifications/mark-read-by-entity',
     PROFILE: '/admin/profile',
     CLINIC_SETTINGS: '/admin/clinic',
     CLINIC_GATEWAY: '/admin/clinic/gateway',
@@ -68,6 +73,11 @@ export const ENDPOINTS = {
     GATEWAY_STRIPE: "/admin/gateway/stripe",
      CLINIC_GOOGLE_RATING_REFRESH: "/admin/clinic/google-rating/refresh",
       DOCTOR_SLOTS: (doctorId) => `/admin/doctors/${doctorId}/slots`,
+     // in ENDPOINTS.ADMIN
+
+
+    
+
   },
 
   // 🔹 Add this block

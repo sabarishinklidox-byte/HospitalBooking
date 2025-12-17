@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
-import { ENDPOINTS } from "../../lib/endpoints";
+import { ENDPOINTS } from '../../lib/endpoints';
+
 /* ------------------ Animations ------------------ */
 
 const containerVariants = {
@@ -44,7 +45,7 @@ export default function PricingPage() {
       setLoading(true);
       try {
         const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
-        setPlans(res.data.filter(p => p.isActive && !p.deletedAt));
+        setPlans(res.data.filter((p) => p.isActive && !p.deletedAt));
       } catch {
         toast.error('Failed to load plans');
       } finally {
@@ -57,7 +58,6 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-100 py-10 px-4">
       <div className="max-w-6xl mx-auto">
-
         {/* ---------------- Top Bar ---------------- */}
         <div className="flex justify-between items-center mb-10">
           <div className="font-bold text-xl text-slate-800">Clinic SaaS</div>
@@ -112,7 +112,7 @@ export default function PricingPage() {
             viewport={{ once: true, margin: '-80px' }}
             className="grid md:grid-cols-3 gap-8"
           >
-            {plans.map(plan => (
+            {plans.map((plan) => (
               <motion.div
                 key={plan.id}
                 variants={cardVariants}
@@ -123,32 +123,71 @@ export default function PricingPage() {
                   {plan.name}
                 </h3>
 
-                <div className="mb-6">
+                <div className="mb-2">
                   <span className="text-4xl font-bold text-blue-600">
                     {plan.currency} {Number(plan.priceMonthly)}
                   </span>
                   <span className="text-slate-500 text-sm"> / month</span>
                 </div>
 
+                <p className="text-xs text-slate-500 mb-4">
+                  {plan.durationDays
+                    ? `Plan duration: ${plan.durationDays} days.`
+                    : 'Plan duration: monthly billing.'}
+                  {plan.isTrial && ' This is a trial plan.'}
+                </p>
+
                 <ul className="space-y-2 mb-8 text-sm">
                   <li>✅ Up to {plan.maxDoctors} doctors</li>
-                  <li>✅ {plan.maxBookingsPerMonth} bookings / month</li>
-                  <li className={plan.allowOnlinePayments ? 'text-emerald-700' : 'text-red-600'}>
+                  <li>
+                    ✅ {plan.maxBookingsPerMonth} bookings per plan period
+                  </li>
+                  <li
+                    className={
+                      plan.allowOnlinePayments
+                        ? 'text-emerald-700'
+                        : 'text-red-600'
+                    }
+                  >
                     {plan.allowOnlinePayments ? '✅' : '✕'} Online payments
                   </li>
-                  <li className={plan.allowCustomBranding ? 'text-emerald-700' : 'text-red-600'}>
+                  <li
+                    className={
+                      plan.allowCustomBranding
+                        ? 'text-emerald-700'
+                        : 'text-red-600'
+                    }
+                  >
                     {plan.allowCustomBranding ? '✅' : '✕'} Custom branding
                   </li>
-                  <li className={plan.enableReviews ? 'text-emerald-700' : 'text-red-600'}>
+                  <li
+                    className={
+                      plan.enableReviews ? 'text-emerald-700' : 'text-red-600'
+                    }
+                  >
                     {plan.enableReviews ? '✅' : '✕'} Reviews & ratings
                   </li>
-                  <li className={plan.enableBulkSlots ? 'text-emerald-700' : 'text-red-600'}>
+                  <li
+                    className={
+                      plan.enableBulkSlots ? 'text-emerald-700' : 'text-red-600'
+                    }
+                  >
                     {plan.enableBulkSlots ? '✅' : '✕'} Bulk slot creation
                   </li>
-                  <li className={plan.enableExports ? 'text-emerald-700' : 'text-red-600'}>
+                  <li
+                    className={
+                      plan.enableExports ? 'text-emerald-700' : 'text-red-600'
+                    }
+                  >
                     {plan.enableExports ? '✅' : '✕'} Export reports
                   </li>
-                  <li className={plan.enableAuditLogs ? 'text-emerald-700' : 'text-red-600'}>
+                  <li
+                    className={
+                      plan.enableAuditLogs
+                        ? 'text-emerald-700'
+                        : 'text-red-600'
+                    }
+                  >
                     {plan.enableAuditLogs ? '✅' : '✕'} Audit logs
                   </li>
                 </ul>

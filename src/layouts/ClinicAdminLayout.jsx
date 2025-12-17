@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, NavLink } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, NavLink, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { logout } from '../features/auth/authSlice';
 import { useAdminContext } from '../context/AdminContext.jsx';
@@ -7,9 +7,25 @@ import { useAdminContext } from '../context/AdminContext.jsx';
 export default function ClinicAdminLayout({ children }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const { plan } = useAdminContext() || {};
+  // which navigation group is open
+  const [openGroup, setOpenGroup] = useState('Main');
+
+  // ✅ get plan + unread from context (NOT local state)
+  const { plan, unreadNotifs, refreshUnread } = useAdminContext() || {};
+
+  // ✅ fetch unread once on layout mount + on route change (not polling)
+  useEffect(() => {
+    refreshUnread?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    refreshUnread?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -18,12 +34,68 @@ export default function ClinicAdminLayout({ children }) {
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  const navLinkClasses = ({ isActive }) =>
-    `flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${
+  const mainLinkClasses = ({ isActive }) =>
+    `flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
       isActive
         ? 'bg-white text-[var(--color-primary)] shadow-md font-bold'
-        : 'text-blue-50 hover:bg-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+        : 'text-blue-50 hover:bg-white/10 hover:text-white'
     }`;
+
+  const subNavLinkClasses = ({ isActive }) =>
+    `flex items-center gap-4 pl-8 pr-4 py-3 rounded-xl transition-all text-base font-medium ${
+      isActive
+        ? 'bg-white text-[var(--color-primary)] shadow-lg font-bold'
+        : 'text-blue-50 hover:bg-white/10 hover:text-white'
+    }`;
+
+  const NavGroup = ({ title, groupName, children: groupChildren }) => {
+    const isOpen = openGroup === groupName;
+
+    const toggleGroup = () => {
+      setOpenGroup(isOpen ? null : groupName);
+    };
+
+    const isChildActive = React.Children.toArray(groupChildren).some((child) => {
+      if (child.props?.to) return location.pathname.startsWith(child.props.to);
+      return false;
+    });
+
+    return (
+      <div className="space-y-2">
+        <button
+          onClick={toggleGroup}
+          className={`w-full flex justify-between items-center px-4 py-2.5 rounded-xl transition-colors font-semibold ${
+            isOpen || isChildActive
+              ? 'text-white bg-white/20'
+              : 'text-blue-200/80 hover:bg-white/10'
+          }`}
+        >
+          <span className="text-sm uppercase tracking-wider">{title}</span>
+          <svg
+            className={`w-4 h-4 transition-transform duration-300 ${
+              isOpen ? 'transform rotate-90' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
+
+        {isOpen && (
+          <div className="space-y-2 overflow-hidden transition-all duration-300">
+            {groupChildren}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen flex bg-gray-50 overflow-hidden">
@@ -80,7 +152,6 @@ export default function ClinicAdminLayout({ children }) {
             </button>
           </div>
 
-          {/* Optional small pill with key features */}
           {plan && (
             <div className="mb-4 inline-flex flex-wrap items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[11px]">
               <span className="font-semibold">
@@ -100,11 +171,12 @@ export default function ClinicAdminLayout({ children }) {
           )}
 
           {/* Nav links */}
-          <nav className="flex-1 space-y-2">
+          <nav className="flex-1 space-y-4 overflow-y-auto">
+            {/* Dashboard */}
             <NavLink
               to="/admin/dashboard"
               onClick={closeSidebar}
-              className={navLinkClasses}
+              className={mainLinkClasses}
             >
               <svg
                 className="w-5 h-5"
@@ -117,165 +189,17 @@ export default function ClinicAdminLayout({ children }) {
                   strokeLinejoin="round"
                   strokeWidth="2"
                   d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                ></path>
+                />
               </svg>
               Dashboard
             </NavLink>
 
-            <NavLink
-              to="/admin/bookings"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M8 7h8M8 11h8M8 15h5M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
-                ></path>
-              </svg>
-              Bookings
-            </NavLink>
-
-            <NavLink
-              to="/admin/slots"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M8 7V3m8 4V3M5 11h14M5 19h14M5 7h14M5 15h14"
-                ></path>
-              </svg>
-              Slots
-            </NavLink>
-
-            <NavLink
-              to="/admin/doctors"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 12c2.21 0 4-1.79 4-4S14.21 4 12 4 8 5.79 8 8s1.79 4 4 4zm0 2c-3.31 0-6 1.34-6 3v1h12v-1c0-1.66-2.69-3-6-3z"
-                ></path>
-              </svg>
-              Doctors
-            </NavLink>
-
-            {/* Reviews always visible */}
-            <NavLink
-              to="/admin/reviews"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M5 5h14v10H7l-2 2V5z"
-                ></path>
-              </svg>
-              Reviews
-            </NavLink>
-
-            <NavLink
-              to="/admin/settings"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M10.325 4.317a1 1 0 011.35-.447l.39.195a1 1 0 01.518.874V7.34a5.001 5.001 0 013.09 3.09h1.401a1 1 0 01.874.518l.195.39a1 1 0 01-.447 1.35l-1.184.592a5.002 5.002 0 01-1.664 2.878l.002 1.402a1 1 0 01-.518.874l-.39.195a1 1 0 01-1.35-.447l-.592-1.184a5.001 5.001 0 01-3.09-3.09L6.66 14.66a1 1 0 01-.874-.518l-.195-.39a1 1 0 01.447-1.35l1.184-.592a5.001 5.001 0 012.878-1.664L10.325 4.317z"
-                ></path>
-              </svg>
-              Settings
-            </NavLink>
-
-            {/* Audit Logs always visible */}
-            <NavLink
-              to="/admin/audit-logs"
-              onClick={closeSidebar}
-              className={navLinkClasses}
-            >
-              <span className="w-5 h-5 inline-flex items-center justify-center rounded-full border border-white/60 text-xs">
-                Ⓛ
-              </span>
-              Audit Logs
-            </NavLink>
-            <NavLink
-  to="/admin/appointments"
-  onClick={closeSidebar}
-  className={navLinkClasses}
->
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3M5 11h14M5 19h14M5 7h14M5 15h14" />
-  </svg>
-  Appointments
-</NavLink>
-            <NavLink
-  to="/admin/billing"
-  onClick={closeSidebar}
-  className={navLinkClasses}
->
-  <svg
-    className="w-5 h-5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      d="M3 7h18M3 12h18M7 17h10"
-    />
-  </svg>
-  Subscription &amp; Billing
-</NavLink>
-
-            {/* Payments only if online payments allowed */}
-            {plan?.allowOnlinePayments && (
+            {/* Scheduling */}
+            <NavGroup title="Scheduling" groupName="Scheduling">
               <NavLink
-                to="/admin/payments"
+                to="/admin/appointments"
                 onClick={closeSidebar}
-                className={navLinkClasses}
+                className={subNavLinkClasses}
               >
                 <svg
                   className="w-5 h-5"
@@ -287,24 +211,163 @@ export default function ClinicAdminLayout({ children }) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v2m8-8a8 8 0 11-16 0 8 8 0 0116 0z"
+                    d="M8 7V3m8 4V3M5 11h14M5 19h14M5 7h14M5 15h14"
                   />
                 </svg>
-                Payments
+                Appointments
               </NavLink>
-            )}
 
-            {/* Analytics section still gated if you want */}
+              <NavLink
+                to="/admin/slots"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M8 7V3m8 4V3M5 11h14M5 19h14M5 7h14M5 15h14"
+                  />
+                </svg>
+                Slots
+              </NavLink>
+
+              <NavLink
+                to="/admin/bookings"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M8 7h8M8 11h8M8 15h5M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
+                  />
+                </svg>
+
+                <span className="flex items-center gap-2">
+                  Bookings
+                  {(unreadNotifs || 0) > 0 && (
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                    </span>
+                  )}
+                </span>
+              </NavLink>
+            </NavGroup>
+
+            {/* Team Management */}
+            <NavGroup title="Team Management" groupName="Team">
+              <NavLink
+                to="/admin/doctors"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 12c2.21 0 4-1.79 4-4S14.21 4 12 4 8 5.79 8 8s1.79 4 4 4zm0 2c-3.31 0-6 1.34-6 3v1h12v-1c0-1.66-2.69-3-6-3z"
+                  />
+                </svg>
+                Doctors
+              </NavLink>
+
+              <NavLink
+                to="/admin/reviews"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5 5h14v10H7l-2 2V5z"
+                  />
+                </svg>
+                Reviews
+              </NavLink>
+            </NavGroup>
+
+            {/* Finance */}
+            <NavGroup title="Finance & Billing" groupName="Finance">
+              <NavLink
+                to="/admin/billing"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 7h18M3 12h18M7 17h10"
+                  />
+                </svg>
+                Subscription &amp; Billing
+              </NavLink>
+
+              {plan?.allowOnlinePayments && (
+                <NavLink
+                  to="/admin/payments"
+                  onClick={closeSidebar}
+                  className={subNavLinkClasses}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V4m0 12v2m8-8a8 8 0 11-16 0 8 8 0 0116 0z"
+                    />
+                  </svg>
+                  Payments
+                </NavLink>
+              )}
+            </NavGroup>
+
+            {/* Analytics */}
             {plan?.enableAuditLogs && (
-              <>
-                <p className="mt-6 mb-1 text-[11px] font-semibold uppercase tracking-wide text-blue-200/80">
-                  Analytics
-                </p>
-
+              <NavGroup title="Analytics" groupName="Analytics">
                 <NavLink
                   to="/admin/analytics/bookings"
                   onClick={closeSidebar}
-                  className={navLinkClasses}
+                  className={subNavLinkClasses}
                 >
                   <svg
                     className="w-5 h-5"
@@ -325,7 +388,7 @@ export default function ClinicAdminLayout({ children }) {
                 <NavLink
                   to="/admin/analytics/slots-usage"
                   onClick={closeSidebar}
-                  className={navLinkClasses}
+                  className={subNavLinkClasses}
                 >
                   <svg
                     className="w-5 h-5"
@@ -342,9 +405,43 @@ export default function ClinicAdminLayout({ children }) {
                   </svg>
                   Slots Analytics
                 </NavLink>
-                
-              </>
+              </NavGroup>
             )}
+
+            {/* Platform */}
+            <NavGroup title="Platform" groupName="Platform">
+              <NavLink
+                to="/admin/settings"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M10.325 4.317a1 1 0 011.35-.447l.39.195a1 1 0 01.518.874V7.34a5.001 5.001 0 013.09 3.09h1.401a1 1 0 01.874.518l.195.39a1 1 0 01-.447 1.35l-1.184.592a5.002 5.002 0 01-1.664 2.878l.002 1.402a1 1 0 01-.518.874l-.39.195a1 1 0 01-1.35-.447l-.592-1.184a5.001 5.001 0 01-3.09-3.09L6.66 14.66a1 1 0 01-.874-.518l-.195-.39a1 1 0 01.447-1.35l1.184-.592a5.001 5.001 0 012.878-1.664L10.325 4.317z"
+                  />
+                </svg>
+                Settings
+              </NavLink>
+
+              <NavLink
+                to="/admin/audit-logs"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <span className="w-5 h-5 inline-flex items-center justify-center rounded-full border border-white/60 text-sm font-semibold">
+                  Ⓛ
+                </span>
+                Audit Logs
+              </NavLink>
+            </NavGroup>
           </nav>
 
           {/* Logout */}
@@ -364,7 +461,7 @@ export default function ClinicAdminLayout({ children }) {
                   strokeLinejoin="round"
                   strokeWidth="2"
                   d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                ></path>
+                />
               </svg>
               Sign Out
             </button>
@@ -394,10 +491,7 @@ export default function ClinicAdminLayout({ children }) {
               />
             </svg>
           </button>
-          <span
-            className="font-semibold"
-            style={{ color: 'var(--color-primary)' }}
-          >
+          <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>
             Clinic Admin
           </span>
           <div className="w-8" />

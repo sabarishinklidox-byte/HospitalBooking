@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout.jsx';
 import toast from 'react-hot-toast';
-import { ENDPOINTS } from "../../lib/endpoints";
+import { ENDPOINTS } from '../../lib/endpoints';
+
 export default function PlansPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,13 +21,17 @@ export default function PlansPage() {
     maxBookingsPerMonth: 100,
     allowOnlinePayments: false,
     allowCustomBranding: false,
-    // enableReviews: true,          // ❌ removed
     enableBulkSlots: true,
     enableExports: true,
     enableAuditLogs: true,
-    enableGoogleReviews: false,      // ✅ new flag
+    enableGoogleReviews: false,
     isActive: true,
+    // NEW
+    isTrial: false,
+    durationDays: '',
+    trialDays: '',
   };
+
   const [form, setForm] = useState(emptyForm);
 
   const loadPlans = async () => {
@@ -80,6 +85,9 @@ export default function PlansPage() {
       enableExports: plan.enableExports ?? true,
       enableAuditLogs: plan.enableAuditLogs ?? true,
       isActive: plan.isActive ?? true,
+      isTrial: plan.isTrial ?? false,
+      durationDays: plan.durationDays ?? '',
+      trialDays: plan.trialDays ?? '',
     });
   };
 
@@ -91,20 +99,40 @@ export default function PlansPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        ...form,
-        priceMonthly: Number(form.priceMonthly),
-        maxDoctors: Number(form.maxDoctors),
-        maxBookingsPerMonth: Number(form.maxBookingsPerMonth),
-      };
-
       if (editing) {
+        // EDIT EXISTING PLAN: send only safe fields
+        const payload = {
+          name: form.name,
+          slug: form.slug,
+          currency: form.currency,
+          allowOnlinePayments: form.allowOnlinePayments,
+          allowCustomBranding: form.allowCustomBranding,
+          enableBulkSlots: form.enableBulkSlots,
+          enableExports: form.enableExports,
+          enableAuditLogs: form.enableAuditLogs,
+          enableGoogleReviews: form.enableGoogleReviews,
+          isActive: form.isActive,
+          // leave price/limits/duration/trial fields out to avoid 400
+        };
+
         await api.put(ENDPOINTS.SUPER_ADMIN.PLAN_BY_ID(editing), payload);
         toast.success('Plan updated');
       } else {
+        // CREATE NEW PLAN: send full payload
+        const payload = {
+          ...form,
+          priceMonthly: Number(form.priceMonthly),
+          maxDoctors: Number(form.maxDoctors),
+          maxBookingsPerMonth: Number(form.maxBookingsPerMonth),
+          durationDays:
+            form.durationDays === '' ? null : Number(form.durationDays),
+          trialDays: form.trialDays === '' ? null : Number(form.trialDays),
+        };
+
         await api.post(ENDPOINTS.SUPER_ADMIN.PLANS, payload);
         toast.success('Plan created');
       }
+
       await loadPlans();
       handleCancelEdit();
     } catch (err) {
@@ -125,9 +153,9 @@ export default function PlansPage() {
 
   const handleViewLog = (plan) => {
     navigate(
-      `${ENDPOINTS.SUPER_ADMIN.AUDIT_LOGS}?entity=PLAN&entityId=${plan.id}&entityName=${encodeURIComponent(
-        plan.name
-      )}`,
+      `${ENDPOINTS.SUPER_ADMIN.AUDIT_LOGS}?entity=PLAN&entityId=${
+        plan.id
+      }&entityName=${encodeURIComponent(plan.name)}`
     );
   };
 
@@ -136,6 +164,7 @@ export default function PlansPage() {
       <div className="max-w-5xl mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-4">Subscription Plans</h1>
 
+        {/* Form */}
         <form
           onSubmit={handleSubmit}
           className="bg-white p-4 rounded-lg shadow mb-6 space-y-3"
@@ -143,7 +172,8 @@ export default function PlansPage() {
           <h2 className="font-semibold mb-2">
             {editing ? 'Edit Plan' : 'New Plan'}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-semibold">Name</label>
               <input
@@ -196,7 +226,7 @@ export default function PlansPage() {
             </div>
             <div>
               <label className="text-xs font-semibold">
-                Max Bookings / Month
+                Max Bookings / Plan Period
               </label>
               <input
                 name="maxBookingsPerMonth"
@@ -204,6 +234,32 @@ export default function PlansPage() {
                 className="input w-full"
                 value={form.maxBookingsPerMonth}
                 onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold">
+                Plan Duration (days)
+              </label>
+              <input
+                name="durationDays"
+                type="number"
+                className="input w-full"
+                value={form.durationDays}
+                onChange={handleChange}
+                placeholder="15 = 15‑day plan, blank = monthly"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold">
+                Trial Days (optional)
+              </label>
+              <input
+                name="trialDays"
+                type="number"
+                className="input w-full"
+                value={form.trialDays}
+                onChange={handleChange}
+                placeholder="e.g. 7"
               />
             </div>
           </div>
@@ -272,6 +328,16 @@ export default function PlansPage() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                name="isTrial"
+                checked={form.isTrial}
+                onChange={handleChange}
+              />
+              Trial plan
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
                 name="isActive"
                 checked={form.isActive}
                 onChange={handleChange}
@@ -299,6 +365,7 @@ export default function PlansPage() {
           </div>
         </form>
 
+        {/* Plans list */}
         <div className="bg-white p-4 rounded-lg shadow">
           <h2 className="font-semibold mb-3">Existing Plans</h2>
           {loading ? (
@@ -312,7 +379,8 @@ export default function PlansPage() {
                   <th className="text-left py-2">Name</th>
                   <th className="text-left py-2">Price</th>
                   <th className="text-left py-2">Doctors</th>
-                  <th className="text-left py-2">Bookings/mo</th>
+                  <th className="text-left py-2">Bookings / Period</th>
+                  <th className="text-left py-2">Duration</th>
                   <th className="text-left py-2">Flags</th>
                   <th className="text-right py-2">Actions</th>
                 </tr>
@@ -326,6 +394,11 @@ export default function PlansPage() {
                     </td>
                     <td className="py-2">{p.maxDoctors}</td>
                     <td className="py-2">{p.maxBookingsPerMonth}</td>
+                    <td className="py-2">
+                      {p.durationDays ? `${p.durationDays} days` : 'Monthly'}
+                      {p.isTrial && ' · Trial'}
+                      {p.trialDays ? ` · ${p.trialDays}d trial` : ''}
+                    </td>
                     <td className="py-2">
                       {p.allowOnlinePayments && (
                         <span className="mr-1">OnlinePay</span>

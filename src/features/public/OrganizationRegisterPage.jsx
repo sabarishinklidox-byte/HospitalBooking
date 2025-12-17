@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import toast from 'react-hot-toast';
-import { ENDPOINTS } from "../../lib/endpoints";
+import { ENDPOINTS } from '../../lib/endpoints';
 
 export default function OrganizationRegisterPage() {
   const [searchParams] = useSearchParams();
@@ -31,9 +31,9 @@ export default function OrganizationRegisterPage() {
     const loadPlans = async () => {
       setLoadingPlans(true);
       try {
-        const res = await api.get(ENDPOINTS.PUBLIC.PLANS );
+        const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
         const activePlans = res.data.filter(
-          (p) => p.isActive && !p.deletedAt,
+          (p) => p.isActive && !p.deletedAt
         );
         setPlans(activePlans);
 
@@ -223,6 +223,8 @@ export default function OrganizationRegisterPage() {
                 {plans.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} — {p.currency} {p.priceMonthly} / month
+                    {p.durationDays && ` · ${p.durationDays} days`}
+                    {p.isTrial && ' · Trial'}
                   </option>
                 ))}
               </select>

@@ -29,6 +29,31 @@ const formatPrice = (price) => {
   }).format(price);
 };
 
+// derive period from 24h time string "HH:MM" or "HH:MM:SS"
+const getPeriodFromTime = (timeStr) => {
+  if (!timeStr) return 'Morning';
+  const hour24 = parseInt(timeStr.split(':')[0], 10); // 0–23
+
+  if (hour24 < 12) return 'Morning';     // 00–11
+  if (hour24 < 17) return 'Afternoon';   // 12–16
+  return 'Evening';                      // 17–23
+};
+
+// convert "HH:MM" / "HH:MM:SS" (24h) to "hh:mm AM/PM"
+const to12Hour = (timeStr) => {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':');
+  let hour = parseInt(h, 10);
+  const minute = m ?? '00';
+
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+
+  const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+  return `${pad(hour)}:${pad(parseInt(minute, 10))} ${ampm}`;
+};
+
 export default function UserBookingPage() {
   const { doctorId } = useParams();
   const location = useLocation();
@@ -77,7 +102,13 @@ export default function UserBookingPage() {
           ENDPOINTS.PUBLIC.DOCTOR_SLOTS(doctor.id),
           { params: { date: formattedDate } }
         );
-        setSlots(res.data);
+
+        const withPeriod = res.data.map((s) => ({
+          ...s,
+          period: s.period || getPeriodFromTime(s.time),
+        }));
+
+        setSlots(withPeriod);
         setSelectedSlot(null);
       } catch (err) {
         console.error(err);
@@ -90,11 +121,10 @@ export default function UserBookingPage() {
     fetchSlots();
   }, [doctor, selectedDate]);
 
-  // 3. Booking Handler (CORRECTED LOGIC)
+  // 3. Booking Handler
   const handleBookNow = async () => {
     if (!selectedSlot) return;
 
-    // A. Auth Check
     if (!token || !user) {
       toast('Please login to continue booking', { icon: '🔒' });
       navigate('/login', { state: { from: location, doctor } });
@@ -104,36 +134,25 @@ export default function UserBookingPage() {
     try {
       setBookingLoading(true);
 
-      // B. Resolve Clinic ID
       const finalClinicId = doctor.clinicId || doctor.clinic?.id;
       if (!finalClinicId) {
         toast.error('System Error: Missing Clinic ID');
         return;
       }
 
-      // ----------------------------------------------------------------
-      // CASE 1: ONLINE PAYMENT (Stripe Redirect)
-      // ----------------------------------------------------------------
       if (selectedSlot.paymentMode === 'ONLINE') {
-         // Create Stripe Session
         const res = await api.post(ENDPOINTS.PAYMENT.CREATE_CHECKOUT_SESSION, {
-             slotId: selectedSlot.id,
-             doctorId: doctor.id,
-             userId: user.id
-         });
+          slotId: selectedSlot.id,
+          doctorId: doctor.id,
+          userId: user.id,
+        });
 
-         // Redirect to Stripe
-         if (res.data.url) {
-             window.location.href = res.data.url;
-         } else {
-             toast.error("Failed to initiate payment");
-         }
-      } 
-      // ----------------------------------------------------------------
-      // CASE 2: OFFLINE / FREE (Direct Booking)
-      // ----------------------------------------------------------------
-      else {
-        // Direct API call to book appointment
+        if (res.data.url) {
+          window.location.href = res.data.url;
+        } else {
+          toast.error('Failed to initiate payment');
+        }
+      } else {
         await api.post(ENDPOINTS.USER.APPOINTMENTS, {
           slotId: selectedSlot.id,
           doctorId: doctor.id,
@@ -144,10 +163,9 @@ export default function UserBookingPage() {
         toast.success('Appointment Confirmed! 🎉');
         navigate('/my-appointments');
       }
-
     } catch (err) {
       const msg = err.response?.data?.error;
-      console.error("Booking Error:", err);
+      console.error('Booking Error:', err);
 
       if (msg && msg.includes('Unique constraint')) {
         toast.error('Slot already taken. Please pick another.');
@@ -271,34 +289,56 @@ export default function UserBookingPage() {
                 <p>No slots available for this date.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 content-start">
-                {slots.map((slot) => {
-                  const isSelected = selectedSlot?.id === slot.id;
-                  const isFree = slot.paymentMode === 'FREE';
+              <div className="space-y-6">
+                {['Morning', 'Afternoon', 'Evening'].map((period) => {
+                  const periodSlots = slots.filter((s) => s.period === period);
+                  if (!periodSlots.length) return null;
 
                   return (
-                    <button
-                      key={slot.id}
-                      disabled={slot.isBooked}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`
-                        relative py-3 px-2 rounded-xl text-sm font-bold transition-all duration-200 border flex flex-col items-center justify-center gap-1
-                        ${
-                          slot.isBooked
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed decoration-gray-300 line-through'
-                            : isSelected
-                            ? 'bg-[#003366] text-white border-[#003366] shadow-lg transform scale-105 ring-2 ring-blue-200 ring-offset-1'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50'
-                        }
-                      `}
-                    >
-                      <span>{slot.time}</span>
-                      {!slot.isBooked && (
-                        <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-blue-200' : 'text-gray-400'}`}>
-                          {isFree ? 'Free' : formatPrice(slot.price)}
+                    <div key={period}>
+                      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                        <span>
+                          {period === 'Morning'
+                            ? '☀️'
+                            : period === 'Afternoon'
+                            ? '🌤️'
+                            : '🌙'}
                         </span>
-                      )}
-                    </button>
+                        <span>{period}</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        {periodSlots.map((slot) => {
+                          const isSelected = selectedSlot?.id === slot.id;
+                          const isFree = slot.paymentMode === 'FREE';
+
+                          return (
+                            <button
+                              key={slot.id}
+                              disabled={slot.isBooked}
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`
+                                min-w-[90px] text-center py-2 px-3 rounded-lg text-sm font-semibold border transition-all
+                                ${
+                                  slot.isBooked
+                                    ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                                    : isSelected
+                                    ? 'bg-white text-blue-600 border-blue-500 shadow-sm'
+                                    : 'bg-white text-gray-700 border-blue-300 hover:bg-blue-50'
+                                }
+                              `}
+                            >
+                              <div>{to12Hour(slot.time)}</div>
+                              {!slot.isBooked && (
+                                <div className="text-[10px] mt-0.5 text-gray-400">
+                                  {isFree ? 'Free' : formatPrice(slot.price)}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -314,12 +354,16 @@ export default function UserBookingPage() {
                     <div>
                       <p className="text-sm text-green-800 font-bold">Slot Selected</p>
                       <p className="text-xs text-green-600">
-                        {selectedDate.toLocaleDateString()} at {selectedSlot.time}
+                        {selectedDate.toLocaleDateString()} at {to12Hour(selectedSlot.time)}
                       </p>
                       <p className="text-xs text-green-700 font-semibold mt-1">
                         {selectedSlot.paymentMode === 'FREE'
                           ? '✨ Free Consultation'
-                          : `${formatPrice(selectedSlot.price)} (${selectedSlot.paymentMode === 'OFFLINE' ? 'Pay at Clinic' : 'Pay Online'})`}
+                          : `${formatPrice(selectedSlot.price)} (${
+                              selectedSlot.paymentMode === 'OFFLINE'
+                                ? 'Pay at Clinic'
+                                : 'Pay Online'
+                            })`}
                       </p>
                     </div>
                   </div>
@@ -331,7 +375,9 @@ export default function UserBookingPage() {
                     {token
                       ? bookingLoading
                         ? 'Processing...'
-                        : selectedSlot.paymentMode === 'ONLINE' ? 'Pay & Book' : 'Confirm Booking'
+                        : selectedSlot.paymentMode === 'ONLINE'
+                        ? 'Pay & Book'
+                        : 'Confirm Booking'
                       : 'Login to Confirm'}
                   </button>
                 </div>

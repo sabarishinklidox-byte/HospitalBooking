@@ -1,3 +1,4 @@
+// src/features/admin/SlotsPage.jsx
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
@@ -21,15 +22,16 @@ export default function SlotsPage() {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState(null);
-  
-  // ✅ Updated Form with Strict Defaults
+
+  // Form (includes kind)
   const [form, setForm] = useState({
     doctorId: '',
     date: today,
     time: '',
     duration: '30',
     price: '500',
-    paymentMode: 'ONLINE', // Default
+    paymentMode: 'ONLINE',
+    kind: 'APPOINTMENT', // APPOINTMENT | BREAK
   });
 
   // Data fetching
@@ -81,7 +83,8 @@ export default function SlotsPage() {
       time: '',
       duration: '30',
       price: '500',
-      paymentMode: 'ONLINE', // Default
+      paymentMode: 'ONLINE',
+      kind: 'APPOINTMENT',
     });
     setModalOpen(true);
   };
@@ -95,7 +98,8 @@ export default function SlotsPage() {
       time: slot.time,
       duration: String(slot.duration),
       price: String(slot.price),
-      paymentMode: slot.paymentMode || 'ONLINE', // Use existing or default
+      paymentMode: slot.paymentMode || 'ONLINE',
+      kind: slot.kind || 'APPOINTMENT',
     });
     setModalOpen(true);
   };
@@ -104,9 +108,15 @@ export default function SlotsPage() {
   const handleCreateOrUpdateSlot = async (e) => {
     e.preventDefault();
 
+    const payload = {
+      ...form,
+      duration: Number(form.duration),
+      price: Number(form.price || 0),
+    };
+
     const promise = editingSlotId
-      ? api.put(ENDPOINTS.ADMIN.SLOT_BY_ID(editingSlotId), form)
-      : api.post(ENDPOINTS.ADMIN.SLOTS, form);
+      ? api.put(ENDPOINTS.ADMIN.SLOT_BY_ID(editingSlotId), payload)
+      : api.post(ENDPOINTS.ADMIN.SLOTS, payload);
 
     await toast.promise(promise, {
       loading: editingSlotId ? 'Updating slot...' : 'Creating slot...',
@@ -120,18 +130,34 @@ export default function SlotsPage() {
   };
 
   // Delete
-  const handleDeleteSlot = async (id) => {
-    if (!window.confirm('Are you sure you want to permanently delete this slot?')) return;
+  // Delete
+const handleDeleteSlot = async (id) => {
+  if (
+    !window.confirm(
+      'Are you sure you want to permanently delete this slot?'
+    )
+  )
+    return;
 
-    await toast.promise(api.delete(ENDPOINTS.ADMIN.SLOT_BY_ID(id)), {
-      loading: 'Deleting slot...',
-      success: () => {
-        fetchSlots();
-        return 'Slot deleted.';
-      },
-      error: 'Failed to delete slot.',
-    });
-  };
+  try {
+    await toast.promise(
+      api.delete(ENDPOINTS.ADMIN.SLOT_BY_ID(id)),
+      {
+        loading: 'Deleting slot...',
+        success: () => {
+          fetchSlots();
+          return 'Slot deleted.';
+        },
+        // let backend message show (e.g. "Cannot delete this slot because it has active bookings...")
+        error: (err) => err.response?.data?.error || 'Failed to delete slot.',
+      }
+    );
+  } catch (err) {
+    // toast.promise error already handled; this is just a safety net
+    const msg = err.response?.data?.error || 'Failed to delete slot.';
+    toast.error(msg);
+  }
+};
 
   return (
     <ClinicAdminLayout>
@@ -141,7 +167,8 @@ export default function SlotsPage() {
             <span>🗓️</span> Manage Slots
           </h1>
           <p className="text-gray-500 mt-2 ml-1">
-            Create and manage individual or bulk appointment slots for your doctors.
+            Create and manage individual or bulk appointment slots for your
+            doctors.
           </p>
         </div>
 
@@ -200,15 +227,24 @@ export default function SlotsPage() {
           </div>
 
           {loading ? (
-            <div className="py-20"><Loader /></div>
+            <div className="py-20">
+              <Loader />
+            </div>
           ) : !doctorId || !selectedDate ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-dashed border-2 border-gray-200">
-              <p className="font-medium text-gray-600">Please select a doctor and a date to view slots.</p>
+              <p className="font-medium text-gray-600">
+                Please select a doctor and a date to view slots.
+              </p>
             </div>
           ) : slots.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-dashed border-2 border-gray-200">
-              <p className="font-medium text-gray-600">No slots found for this day.</p>
-              <p className="text-sm text-gray-400 mt-1">Use the "Add Single Slot" or "Bulk Create" buttons to generate them.</p>
+              <p className="font-medium text-gray-600">
+                No slots found for this day.
+              </p>
+              <p className="text-sm text-gray-400 mt-1">
+                Use the "Add Single Slot" or "Bulk Create" buttons to generate
+                them.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -217,6 +253,7 @@ export default function SlotsPage() {
                   <tr>
                     <th className="px-4 py-3">Time</th>
                     <th className="px-4 py-3">Duration</th>
+                    <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Payment Mode</th>
                     <th className="px-4 py-3">Price</th>
                     <th className="px-4 py-3">Status</th>
@@ -226,29 +263,70 @@ export default function SlotsPage() {
                 <tbody className="divide-y divide-gray-100">
                   {slots.map((slot) => (
                     <tr key={slot.id} className="hover:bg-blue-50/50">
-                      <td className="px-4 py-3 font-mono font-bold text-gray-800">{slot.time}</td>
-                      <td className="px-4 py-3 text-gray-600">{slot.duration} mins</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-800">
+                        {slot.time}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {slot.duration} mins
+                      </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          slot.paymentMode === 'FREE' ? 'bg-green-100 text-green-800' :
-                          slot.paymentMode === 'ONLINE' ? 'bg-blue-100 text-blue-800' :
-                          'bg-orange-100 text-orange-800'
-                        }`}>
-                          {slot.paymentMode === 'ONLINE' ? 'Online Only' : 
-                           slot.paymentMode === 'OFFLINE' ? 'Pay at Clinic' : 'Free'}
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            slot.kind === 'BREAK'
+                              ? 'bg-gray-200 text-gray-800'
+                              : 'bg-indigo-100 text-indigo-800'
+                          }`}
+                        >
+                          {slot.kind === 'BREAK' ? 'Break / Lunch' : 'Appointment'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            slot.paymentMode === 'FREE'
+                              ? 'bg-green-100 text-green-800'
+                              : slot.paymentMode === 'ONLINE'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-orange-100 text-orange-800'
+                          }`}
+                        >
+                          {slot.paymentMode === 'ONLINE'
+                            ? 'Online Only'
+                            : slot.paymentMode === 'OFFLINE'
+                            ? 'Pay at Clinic'
+                            : 'Free'}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-semibold text-green-700">
-                        {slot.paymentMode === 'FREE' ? 'Free' : `₹${slot.price}`}
+                        {slot.paymentMode === 'FREE'
+                          ? 'Free'
+                          : `₹${slot.price}`}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${slot.isBooked ? 'bg-red-100 text-red-800' : 'bg-cyan-100 text-cyan-800'}`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            slot.isBooked
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-cyan-100 text-cyan-800'
+                          }`}
+                        >
                           {slot.isBooked ? 'Booked' : 'Available'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
-                        <button onClick={() => handleEditSlot(slot)} className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md font-semibold">Edit</button>
-                        <button onClick={() => handleDeleteSlot(slot.id)} disabled={slot.isBooked} className="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Delete</button>
+                        <button
+                          onClick={() => handleEditSlot(slot)}
+                          className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md font-semibold"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSlot(slot.id)}
+                          disabled={slot.isBooked}
+                          className="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -260,32 +338,83 @@ export default function SlotsPage() {
       </div>
 
       {/* Add / Edit modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingSlotId ? 'Edit Slot' : 'Create New Slot'}>
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingSlotId ? 'Edit Slot' : 'Create New Slot'}
+      >
         <form onSubmit={handleCreateOrUpdateSlot} className="space-y-4 p-1">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-            <input type="time" className="input w-full" value={form.time} onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))} required />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time
+            </label>
+            <input
+              type="time"
+              className="input w-full"
+              value={form.time}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, time: e.target.value }))
+              }
+              required
+            />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
-              <input type="number" min="10" className="input w-full" value={form.duration} onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))} required />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Duration (min)
+              </label>
+              <input
+                type="number"
+                min="10"
+                className="input w-full"
+                value={form.duration}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, duration: e.target.value }))
+                }
+                required
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
-              <input 
-                type="number" min="0" className="input w-full" 
-                value={form.price} 
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))} 
-                required={form.paymentMode !== 'FREE'} 
-                disabled={form.paymentMode === 'FREE'} 
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Price (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                className="input w-full"
+                value={form.price}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, price: e.target.value }))
+                }
+                required={form.paymentMode !== 'FREE'}
+                disabled={form.paymentMode === 'FREE'}
               />
             </div>
           </div>
 
-          {/* ✅ Strict 3-Option Select */}
+          {/* Slot type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Slot Type
+            </label>
+            <select
+              className="input w-full bg-white"
+              value={form.kind}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, kind: e.target.value }))
+              }
+            >
+              <option value="APPOINTMENT">Appointment</option>
+              <option value="BREAK">Break / Lunch</option>
+            </select>
+          </div>
+
+          {/* Payment mode */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Payment Mode
+            </label>
             <select
               className="input w-full bg-white"
               value={form.paymentMode}
@@ -305,8 +434,16 @@ export default function SlotsPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary py-2 px-5">Cancel</button>
-            <button type="submit" className="btn-primary py-2 px-5">{editingSlotId ? 'Update Slot' : 'Create Slot'}</button>
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="btn-secondary py-2 px-5"
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary py-2 px-5">
+              {editingSlotId ? 'Update Slot' : 'Create Slot'}
+            </button>
           </div>
         </form>
       </Modal>
