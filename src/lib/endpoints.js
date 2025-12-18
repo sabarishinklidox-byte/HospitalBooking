@@ -18,18 +18,20 @@ export const ENDPOINTS = {
      ORGANIZATION_REGISTER: "/public/organizations/register",
   },
 
-  USER: {
-    SIGNUP: '/user/signup',
-    LOGIN: '/user/login',
-    APPOINTMENTS: '/user/appointments',
-    APPOINTMENT_BY_ID: (id) => `/user/appointments/${id}`,
-    PROFILE: '/user/profile',
-    HISTORY: '/user/history',
-    CANCEL_APPOINTMENT: (id) => `/user/appointments/${id}/cancel`,
-    RESCHEDULE_APPOINTMENT: (id) => `/user/appointments/${id}/reschedule`,
-    REVIEWS: '/user/reviews',
-    DOCTOR_REVIEWS: (doctorId) => `/user/doctors/${doctorId}/reviews`,
-  },
+ USER: {
+  SIGNUP: '/user/signup',
+  LOGIN: '/user/login',
+  APPOINTMENTS: '/user/appointments',
+  APPOINTMENT_BY_ID: (id) => `/user/appointments/${id}`,
+  PROFILE: '/user/profile',
+  HISTORY: '/user/history',
+  SLOTS: '/user/slots', // ✅ ADD THIS
+  CANCEL_APPOINTMENT: (id) => `/user/appointments/${id}/cancel`,
+  RESCHEDULE_APPOINTMENT: (id) => `/user/appointments/${id}/reschedule`,
+  REVIEWS: '/user/reviews',
+  DOCTOR_REVIEWS: (doctorId) => `/user/doctors/${doctorId}/reviews`,
+},
+
 
   ADMIN: {
     LOGIN: '/admin/login',

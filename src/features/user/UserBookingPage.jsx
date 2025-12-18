@@ -11,8 +11,7 @@ import toast from 'react-hot-toast';
 import { ENDPOINTS } from '../../lib/endpoints';
 
 // API base + helper to build full URLs
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const toFullUrl = (url) => {
   if (!url) return null;
@@ -32,11 +31,10 @@ const formatPrice = (price) => {
 // derive period from 24h time string "HH:MM" or "HH:MM:SS"
 const getPeriodFromTime = (timeStr) => {
   if (!timeStr) return 'Morning';
-  const hour24 = parseInt(timeStr.split(':')[0], 10); // 0–23
-
-  if (hour24 < 12) return 'Morning';     // 00–11
-  if (hour24 < 17) return 'Afternoon';   // 12–16
-  return 'Evening';                      // 17–23
+  const hour24 = parseInt(timeStr.split(':')[0], 10);
+  if (hour24 < 12) return 'Morning';
+  if (hour24 < 17) return 'Afternoon';
+  return 'Evening';
 };
 
 // convert "HH:MM" / "HH:MM:SS" (24h) to "hh:mm AM/PM"
@@ -88,7 +86,7 @@ export default function UserBookingPage() {
     fetchDoctor();
   }, [doctorId, doctor]);
 
-  // 2. Fetch Slots
+  // 2. Fetch Slots (FIXED: use /user/slots that returns isBooked)
   useEffect(() => {
     if (!doctor || !selectedDate) return;
 
@@ -98,27 +96,44 @@ export default function UserBookingPage() {
       const formattedDate = selectedDate.toISOString().split('T')[0];
 
       try {
-        const res = await api.get(
-          ENDPOINTS.PUBLIC.DOCTOR_SLOTS(doctor.id),
-          { params: { date: formattedDate } }
-        );
+        const clinicId = doctor.clinicId || doctor.clinic?.id;
+        if (!clinicId) {
+          setSlots([]);
+          setSelectedSlot(null);
+          toast.error('System Error: Missing Clinic ID');
+          return;
+        }
 
-        const withPeriod = res.data.map((s) => ({
+        // ✅ IMPORTANT: call user slots endpoint that returns isBooked
+        // You must define ENDPOINTS.USER.SLOTS = "/user/slots"
+        const res = await api.get(ENDPOINTS.USER.SLOTS, {
+          params: { clinicId, doctorId: doctor.id, date: formattedDate },
+        });
+
+        const list = res.data?.data || [];
+
+        const withPeriod = list.map((s) => ({
           ...s,
+          isBooked: Boolean(s.isBooked),
           period: s.period || getPeriodFromTime(s.time),
         }));
 
         setSlots(withPeriod);
-        setSelectedSlot(null);
+
+        // if currently selected slot became booked, clear it
+        if (selectedSlot && withPeriod.some((s) => s.id === selectedSlot.id && s.isBooked)) {
+          setSelectedSlot(null);
+        }
       } catch (err) {
         console.error(err);
-        toast.error('Failed to load slots');
+        toast.error(err?.response?.data?.error || 'Failed to load slots');
       } finally {
         setLoading(false);
       }
     };
 
     fetchSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctor, selectedDate]);
 
   // 3. Booking Handler
@@ -128,6 +143,13 @@ export default function UserBookingPage() {
     if (!token || !user) {
       toast('Please login to continue booking', { icon: '🔒' });
       navigate('/login', { state: { from: location, doctor } });
+      return;
+    }
+
+    // extra safety
+    if (selectedSlot.isBooked) {
+      toast.error('Slot already booked. Please pick another.');
+      setSelectedSlot(null);
       return;
     }
 
@@ -165,14 +187,14 @@ export default function UserBookingPage() {
       }
     } catch (err) {
       const msg = err.response?.data?.error;
+      const status = err.response?.status;
       console.error('Booking Error:', err);
 
-      if (msg && msg.includes('Unique constraint')) {
-        toast.error('Slot already taken. Please pick another.');
+      // ✅ backend should return 409 when slot taken (including P2002 case)
+      if (status === 409) {
+        toast.error(msg || 'Slot already taken. Please pick another.');
         setSlots((prev) =>
-          prev.map((s) =>
-            s.id === selectedSlot.id ? { ...s, isBooked: true } : s
-          )
+          prev.map((s) => (s.id === selectedSlot.id ? { ...s, isBooked: true } : s))
         );
         setSelectedSlot(null);
       } else {
@@ -183,7 +205,7 @@ export default function UserBookingPage() {
     }
   };
 
-  if (loading && !doctor)
+  if (loading && !doctor) {
     return (
       <UserLayout>
         <div className="h-screen flex items-center justify-center">
@@ -191,8 +213,9 @@ export default function UserBookingPage() {
         </div>
       </UserLayout>
     );
+  }
 
-  if (error)
+  if (error) {
     return (
       <UserLayout>
         <div className="h-screen flex items-center justify-center text-red-500 font-medium">
@@ -200,6 +223,7 @@ export default function UserBookingPage() {
         </div>
       </UserLayout>
     );
+  }
 
   if (!doctor) return null;
 
@@ -249,12 +273,7 @@ export default function UserBookingPage() {
               </h3>
             </div>
             <div className="p-4 flex justify-center booking-calendar-wrapper">
-              <DatePicker
-                selected={selectedDate}
-                onChange={(date) => setSelectedDate(date)}
-                inline
-                minDate={new Date()}
-              />
+              <DatePicker selected={selectedDate} onChange={(d) => setSelectedDate(d)} inline minDate={new Date()} />
             </div>
           </div>
         </div>
@@ -298,11 +317,7 @@ export default function UserBookingPage() {
                     <div key={period}>
                       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
                         <span>
-                          {period === 'Morning'
-                            ? '☀️'
-                            : period === 'Afternoon'
-                            ? '🌤️'
-                            : '🌙'}
+                          {period === 'Morning' ? '☀️' : period === 'Afternoon' ? '🌤️' : '🌙'}
                         </span>
                         <span>{period}</span>
                       </div>
@@ -311,16 +326,21 @@ export default function UserBookingPage() {
                         {periodSlots.map((slot) => {
                           const isSelected = selectedSlot?.id === slot.id;
                           const isFree = slot.paymentMode === 'FREE';
+                          const isBooked = slot.isBooked === true;
 
                           return (
                             <button
                               key={slot.id}
-                              disabled={slot.isBooked}
-                              onClick={() => setSelectedSlot(slot)}
+                              type="button"
+                              disabled={isBooked}
+                              onClick={() => {
+                                if (isBooked) return; // extra safety
+                                setSelectedSlot(slot);
+                              }}
                               className={`
                                 min-w-[90px] text-center py-2 px-3 rounded-lg text-sm font-semibold border transition-all
                                 ${
-                                  slot.isBooked
+                                  isBooked
                                     ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through'
                                     : isSelected
                                     ? 'bg-white text-blue-600 border-blue-500 shadow-sm'
@@ -329,7 +349,10 @@ export default function UserBookingPage() {
                               `}
                             >
                               <div>{to12Hour(slot.time)}</div>
-                              {!slot.isBooked && (
+
+                              {isBooked ? (
+                                <div className="text-[10px] mt-0.5 text-gray-400">Booked</div>
+                              ) : (
                                 <div className="text-[10px] mt-0.5 text-gray-400">
                                   {isFree ? 'Free' : formatPrice(slot.price)}
                                 </div>
@@ -367,6 +390,7 @@ export default function UserBookingPage() {
                       </p>
                     </div>
                   </div>
+
                   <button
                     onClick={handleBookNow}
                     disabled={bookingLoading}

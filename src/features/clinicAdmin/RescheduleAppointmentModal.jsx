@@ -1,18 +1,16 @@
-// src/features/clinicAdmin/RescheduleAppointmentModal.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
 import Loader from "../../components/Loader.jsx";
 import clsx from "clsx";
-import { ENDPOINTS } from '../../lib/endpoints';
+import { ENDPOINTS } from "../../lib/endpoints";
 
 const PRIMARY_COLOR = "#0b3b5e";
 
 export default function RescheduleAppointmentModal({
   open,
   onClose,
-  appointment,      // { id, doctorId, doctorName, doctorSpeciality, date, time }
-  clinicId,         // optional, if your API needs it
-  onRescheduled,    // callback(updatedAppt)
+  appointment, // { id, doctorId, doctorName, doctorSpeciality, date, time }
+  onRescheduled,
 }) {
   const [slotsByDay, setSlotsByDay] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -23,28 +21,27 @@ export default function RescheduleAppointmentModal({
   const [deleteOldSlot, setDeleteOldSlot] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------- load slots ----------
   const fetchSlots = async () => {
-    if (!appointment?.doctorId) return;
+    if (!appointment?.doctorId || !appointment?.id) return;
 
     try {
       setLoadingSlots(true);
+      setError("");
+
       const res = await api.get(
-          ENDPOINTS.ADMIN.DOCTOR_SLOTS(appointment.doctorId),
+        ENDPOINTS.ADMIN.DOCTOR_SLOTS(appointment.doctorId),
         {
           params: {
-            clinicId,
             from: new Date().toISOString().slice(0, 10),
-            days: 7, // Today + next 6 days
+            days: 7,
+            excludeAppointmentId: appointment.id, // ✅ important
           },
         }
       );
 
       const days = res.data || [];
       setSlotsByDay(days);
-      if (days.length > 0) {
-        setSelectedDate(days[0].date);
-      }
+      setSelectedDate(days[0]?.date ?? null);
     } catch (err) {
       console.error("Failed to load slots", err);
       setError("Failed to load available slots for this doctor.");
@@ -56,7 +53,6 @@ export default function RescheduleAppointmentModal({
   useEffect(() => {
     if (!open || !appointment?.doctorId) return;
 
-    // reset state every time modal opens for a new appointment
     setSlotsByDay([]);
     setSelectedSlot(null);
     setSelectedDate(null);
@@ -66,14 +62,19 @@ export default function RescheduleAppointmentModal({
 
     fetchSlots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, appointment?.id, clinicId]);
+  }, [open, appointment?.id, appointment?.doctorId]);
 
   if (!open || !appointment) return null;
 
-  // ---------- confirm reschedule ----------
   const handleConfirm = async () => {
     if (!selectedDate || !selectedSlot) {
       setError("Please select a new time slot.");
+      return;
+    }
+
+    // extra guard: don’t allow booked slot submission
+    if (selectedSlot?.isBooked) {
+      setError("This slot is already booked. Please choose another slot.");
       return;
     }
 
@@ -82,7 +83,7 @@ export default function RescheduleAppointmentModal({
       setError("");
 
       const res = await api.patch(
-        `/admin/appointments/${appointment.id}/reschedule`,
+        `${ENDPOINTS.ADMIN.APPOINTMENT_BY_ID(appointment.id)}/reschedule`,
         {
           newDate: selectedDate,
           newTime: selectedSlot.startTime,
@@ -91,14 +92,11 @@ export default function RescheduleAppointmentModal({
         }
       );
 
-      onRescheduled?.(res.data.appointment);
+      onRescheduled?.(res.data?.appointment);
       onClose();
     } catch (err) {
       console.error("Reschedule failed", err);
-      const msg =
-        err?.response?.data?.error ||
-        "Failed to reschedule appointment. Please try again.";
-      setError(msg);
+      setError(err?.response?.data?.error || "Failed to reschedule appointment.");
     } finally {
       setSaving(false);
     }
@@ -111,7 +109,6 @@ export default function RescheduleAppointmentModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 overflow-hidden">
-        {/* Header */}
         <div
           className="px-6 py-4 flex justify-between items-center"
           style={{ backgroundColor: PRIMARY_COLOR }}
@@ -132,9 +129,7 @@ export default function RescheduleAppointmentModal({
           </button>
         </div>
 
-        {/* Body */}
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-          {/* Doctor + current slot info */}
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-sm font-bold text-[#0b3b5e]">
               {appointment.doctorName?.charAt(0)}
@@ -152,14 +147,12 @@ export default function RescheduleAppointmentModal({
             </div>
           </div>
 
-          {/* Error message */}
           {error && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {error}
             </div>
           )}
 
-          {/* Date tabs */}
           <div className="border-b border-gray-200 overflow-x-auto">
             <div className="flex gap-2 min-w-max">
               {slotsByDay.map((day) => (
@@ -177,15 +170,14 @@ export default function RescheduleAppointmentModal({
                   )}
                 >
                   <div>{day.label || new Date(day.date).toDateString()}</div>
-                  <div className="text-[11px] text-green-600">
-                    {day.slots.length} slots available
+                  <div className="text-[11px] text-gray-500">
+                    {day.slots?.length ?? 0} slots
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Slots grid */}
           {loadingSlots ? (
             <div className="flex justify-center py-10">
               <Loader />
@@ -193,7 +185,7 @@ export default function RescheduleAppointmentModal({
           ) : (
             <div className="space-y-4">
               {periods.map((period) => {
-                const periodSlots = dayObj.slots.filter(
+                const periodSlots = (dayObj.slots || []).filter(
                   (s) => s.period === period
                 );
                 if (periodSlots.length === 0) return null;
@@ -205,29 +197,30 @@ export default function RescheduleAppointmentModal({
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {periodSlots.map((slot) => {
+                        const booked = !!slot.isBooked; // ✅ backend must send
                         const isSelected =
-                          selectedSlot &&
-                          selectedSlot.timeLabel === slot.timeLabel &&
+                          selectedSlot?.startTime === slot.startTime &&
                           selectedDate === dayObj.date;
 
                         return (
                           <button
                             key={`${slot.timeLabel}-${slot.startTime}`}
                             type="button"
+                            disabled={booked}
                             onClick={() =>
-                              setSelectedSlot({
-                                ...slot,
-                                date: dayObj.date,
-                              })
+                              !booked &&
+                              setSelectedSlot({ ...slot, date: dayObj.date })
                             }
                             className={clsx(
                               "px-4 py-2 rounded-md border text-sm min-w-[88px]",
-                              isSelected
+                              booked
+                                ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                : isSelected
                                 ? "bg-[#0b3b5e] text-white border-[#0b3b5e]"
                                 : "bg-white text-gray-700 border-gray-200 hover:border-[#0b3b5e]"
                             )}
                           >
-                            {slot.timeLabel}
+                            {slot.timeLabel} {booked ? "(Booked)" : ""}
                           </button>
                         );
                       })}
@@ -236,7 +229,7 @@ export default function RescheduleAppointmentModal({
                 );
               })}
 
-              {dayObj.slots.length === 0 && (
+              {(dayObj.slots || []).length === 0 && (
                 <p className="text-xs text-gray-400">
                   No slots available for this day.
                 </p>
@@ -244,7 +237,6 @@ export default function RescheduleAppointmentModal({
             </div>
           )}
 
-          {/* Old slot handling toggle */}
           <div className="flex items-center gap-2 pt-1">
             <input
               id="deleteOldSlot"
@@ -261,7 +253,6 @@ export default function RescheduleAppointmentModal({
             </label>
           </div>
 
-          {/* Note */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
               Admin note (optional)
@@ -269,14 +260,12 @@ export default function RescheduleAppointmentModal({
             <textarea
               className="w-full border rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0b3b5e]/60"
               rows={2}
-              placeholder="E.g. Spoke to patient, rescheduled after confirmation."
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t flex justify-end gap-3 bg-gray-50">
           <button
             type="button"

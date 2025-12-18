@@ -1,21 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import api from '../../lib/api';
-import UserLayout from '../../layouts/UserLayout.jsx';
-import Loader from '../../components/Loader.jsx';
-import Modal from '../../components/Modal.jsx';
-import AppointmentCard from '../../features/user/AppointmentCard.jsx';
-import { toast } from 'react-hot-toast';
-import { ENDPOINTS } from '../../lib/endpoints';
+import React, { useEffect, useState } from "react";
+import api from "../../lib/api";
+import UserLayout from "../../layouts/UserLayout.jsx";
+import Loader from "../../components/Loader.jsx";
+import Modal from "../../components/Modal.jsx";
+import AppointmentCard from "../../features/user/AppointmentCard.jsx";
+import { toast } from "react-hot-toast";
+import { ENDPOINTS } from "../../lib/endpoints";
 
 export default function MyAppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // filters + pagination
-  const [statusFilter, setStatusFilter] = useState('');
-  const [doctorFilter, setDoctorFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState("");
+  const [doctorFilter, setDoctorFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -26,17 +26,16 @@ export default function MyAppointmentsPage() {
   // --- RESCHEDULE STATE ---
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState(null);
-  const [newDate, setNewDate] = useState('');
-  const [availableSlots, setAvailableSlots] = useState([]);
+  const [newDate, setNewDate] = useState("");
+  const [slots, setSlots] = useState([]); // ✅ keep ALL slots (booked + unbooked)
   const [selectedNewSlotId, setSelectedNewSlotId] = useState(null);
   const [slotLoading, setSlotLoading] = useState(false);
 
   // --- REVIEW STATE ---
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewAppt, setSelectedReviewAppt] = useState(null);
-  const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
+  const [reviewData, setReviewData] = useState({ rating: 5, comment: "" });
 
-  // build params for API
   const buildParams = () => ({
     page,
     limit: 10,
@@ -46,23 +45,21 @@ export default function MyAppointmentsPage() {
     dateTo: dateTo || undefined,
   });
 
-  // 1. Fetch appointments
+  // 1) Fetch appointments
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const res = await api.get(ENDPOINTS.USER.APPOINTMENTS, {
-        params: buildParams(),
-      });
+      const res = await api.get(ENDPOINTS.USER.APPOINTMENTS, { params: buildParams() });
 
-      if (res.data.data && res.data.pagination) {
+      if (res.data?.data && res.data?.pagination) {
         setAppointments(res.data.data);
         setPagination(res.data.pagination);
       } else {
         setAppointments(res.data);
       }
     } catch (err) {
-      console.error('Error fetching appointments', err);
-      toast.error('Failed to load appointments');
+      console.error("Error fetching appointments", err);
+      toast.error("Failed to load appointments");
     } finally {
       setLoading(false);
     }
@@ -74,57 +71,72 @@ export default function MyAppointmentsPage() {
   }, [page, statusFilter, doctorFilter, dateFrom, dateTo]);
 
   const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.totalPages) {
-      setPage(newPage);
-    }
+    if (newPage >= 1 && newPage <= pagination.totalPages) setPage(newPage);
   };
 
-  // 2. Reschedule Handlers
+  // 2) Reschedule handlers
   const openReschedule = (appt) => {
     setSelectedAppt(appt);
-    setNewDate('');
-    setAvailableSlots([]);
+    setNewDate("");
+    setSlots([]);
     setSelectedNewSlotId(null);
     setRescheduleModalOpen(true);
   };
 
+  // ✅ Fetch slots for reschedule (this is the main FIX)
   useEffect(() => {
     if (!newDate || !selectedAppt) return;
+
     const fetchSlots = async () => {
+      // ✅ clinicId MUST exist in selectedAppt (backend should return it)
+      const clinicId = selectedAppt.clinicId ?? selectedAppt.clinic?.id;
+      const doctorId = selectedAppt.doctor?.id;
+
+      if (!clinicId || !doctorId) {
+        toast.error("Missing clinicId/doctorId in appointment data.");
+        return;
+      }
+
       setSlotLoading(true);
       try {
-        const res = await api.get(
-          ENDPOINTS.PUBLIC.DOCTOR_SLOTS(selectedAppt.doctor.id),
-          { params: { date: newDate } }
-        );
-        setAvailableSlots(res.data.filter((s) => !s.isBooked));
+        const res = await api.get(ENDPOINTS.USER.SLOTS, {
+          params: {
+            clinicId,
+            doctorId,
+            date: newDate,
+            // If you later add backend support:
+            // excludeAppointmentId: selectedAppt.id,
+          },
+        });
+
+        // backend returns { data: [...] }
+        setSlots(res.data?.data ?? []);
       } catch (err) {
         console.error(err);
-        toast.error('Failed to load slots for selected date');
+        toast.error("Failed to load slots for selected date");
       } finally {
         setSlotLoading(false);
       }
     };
+
     fetchSlots();
   }, [newDate, selectedAppt]);
 
   const handleRescheduleSubmit = async () => {
     if (!selectedNewSlotId) {
-      toast.error('Please select a new slot');
+      toast.error("Please select a new slot");
       return;
     }
 
     try {
       await toast.promise(
-        api.patch(
-          ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id),
-          { newSlotId: selectedNewSlotId }
-        ),
+        api.patch(ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id), {
+          newSlotId: selectedNewSlotId,
+        }),
         {
-          loading: 'Rescheduling your appointment...',
-          success: 'Appointment rescheduled successfully!',
-          error: (err) =>
-            err.response?.data?.error || 'Reschedule failed',
+          loading: "Rescheduling your appointment...",
+          success: "Appointment rescheduled successfully!",
+          error: (err) => err.response?.data?.error || "Reschedule failed",
         }
       );
 
@@ -135,38 +147,28 @@ export default function MyAppointmentsPage() {
     }
   };
 
-  // 3. Cancel / Request-cancel handler
+  // 3) Cancel handler
   const handleCancel = async (appt) => {
-    const isOnlinePay = appt.slot?.paymentMode === 'ONLINE';
+    const isOnlinePay = appt.slot?.paymentMode === "ONLINE";
 
     const confirmText = isOnlinePay
-      ? 'Do you want to request cancellation for this paid appointment?'
-      : 'Do you want to cancel this appointment?';
+      ? "Do you want to request cancellation for this paid appointment?"
+      : "Do you want to cancel this appointment?";
 
     if (!window.confirm(confirmText)) return;
 
-    let reason = window.prompt(
-      'Reason for cancellation (optional, shown to clinic):'
-    );
+    let reason = window.prompt("Reason for cancellation (optional, shown to clinic):");
     if (reason === null) return;
     reason = reason.trim() || null;
 
     try {
-      await toast.promise(
-        api.post(ENDPOINTS.USER.CANCEL_APPOINTMENT(appt.id), { reason }),
-        {
-          loading: isOnlinePay
-            ? 'Submitting cancellation request...'
-            : 'Cancelling appointment...',
-          success: (res) =>
-            res.data?.message ||
-            (isOnlinePay
-              ? 'Cancellation request sent to clinic.'
-              : 'Appointment cancelled.'),
-          error: (err) =>
-            err.response?.data?.error || 'Failed to cancel appointment',
-        }
-      );
+      await toast.promise(api.post(ENDPOINTS.USER.CANCEL_APPOINTMENT(appt.id), { reason }), {
+        loading: isOnlinePay ? "Submitting cancellation request..." : "Cancelling appointment...",
+        success: (res) =>
+          res.data?.message ||
+          (isOnlinePay ? "Cancellation request sent to clinic." : "Appointment cancelled."),
+        error: (err) => err.response?.data?.error || "Failed to cancel appointment",
+      });
 
       fetchAppointments();
     } catch {
@@ -174,10 +176,10 @@ export default function MyAppointmentsPage() {
     }
   };
 
-  // 4. Review Handlers
+  // 4) Review handlers
   const openReviewModal = (appt) => {
     setSelectedReviewAppt(appt);
-    setReviewData({ rating: 5, comment: '' });
+    setReviewData({ rating: 5, comment: "" });
     setReviewModalOpen(true);
   };
 
@@ -190,10 +192,9 @@ export default function MyAppointmentsPage() {
           comment: reviewData.comment,
         }),
         {
-          loading: 'Submitting your review...',
-          success: 'Review submitted! Thank you.',
-          error: (err) =>
-            err.response?.data?.error || 'Failed to submit review',
+          loading: "Submitting your review...",
+          success: "Review submitted! Thank you.",
+          error: (err) => err.response?.data?.error || "Failed to submit review",
         }
       );
 
@@ -205,26 +206,22 @@ export default function MyAppointmentsPage() {
   };
 
   const ratingLabels = {
-    1: 'Very poor',
-    2: 'Below average',
-    3: 'Average',
-    4: 'Very good',
-    5: 'Excellent',
+    1: "Very poor",
+    2: "Below average",
+    3: "Average",
+    4: "Very good",
+    5: "Excellent",
   };
 
   return (
     <UserLayout>
       <div className="max-w-4xl mx-auto p-6">
-        <h1 className="text-2xl font-bold text-[#0b3b5e] mb-4">
-          My Appointments
-        </h1>
+        <h1 className="text-2xl font-bold text-[#0b3b5e] mb-4">My Appointments</h1>
 
         {/* Filters */}
         <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Status
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -243,9 +240,7 @@ export default function MyAppointmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              From
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">From</label>
             <input
               type="date"
               value={dateFrom}
@@ -258,9 +253,7 @@ export default function MyAppointmentsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              To
-            </label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
             <input
               type="date"
               value={dateTo}
@@ -296,9 +289,7 @@ export default function MyAppointmentsPage() {
             {pagination.totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
                 <button
-                  onClick={() =>
-                    handlePageChange(pagination.page - 1)
-                  }
+                  onClick={() => handlePageChange(pagination.page - 1)}
                   disabled={pagination.page === 1}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm disabled:opacity-50"
                 >
@@ -308,9 +299,7 @@ export default function MyAppointmentsPage() {
                   Page {pagination.page} of {pagination.totalPages}
                 </span>
                 <button
-                  onClick={() =>
-                    handlePageChange(pagination.page + 1)
-                  }
+                  onClick={() => handlePageChange(pagination.page + 1)}
                   disabled={pagination.page === pagination.totalPages}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm disabled:opacity-50"
                 >
@@ -321,7 +310,7 @@ export default function MyAppointmentsPage() {
           </>
         )}
 
-        {/* === MODAL 1: RESCHEDULE === */}
+        {/* MODAL 1: RESCHEDULE */}
         <Modal
           isOpen={rescheduleModalOpen}
           onClose={() => setRescheduleModalOpen(false)}
@@ -329,49 +318,61 @@ export default function MyAppointmentsPage() {
         >
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Select a new date for{' '}
-              <strong>Dr. {selectedAppt?.doctor?.name}</strong>
+              Select a new date for <strong>Dr. {selectedAppt?.doctor?.name}</strong>
             </p>
+
             <div>
-              <label className="block text-sm font-medium mb-1">
-                New Date
-              </label>
+              <label className="block text-sm font-medium mb-1">New Date</label>
               <input
                 type="date"
                 className="input w-full border p-2 rounded"
-                min={new Date().toISOString().split('T')[0]}
+                min={new Date().toISOString().split("T")[0]}
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
               />
             </div>
+
             {newDate && (
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Available Slots
-                </label>
+                <label className="block text-sm font-medium mb-2">Slots</label>
+
                 {slotLoading ? (
                   <p className="text-xs text-gray-400">Loading...</p>
-                ) : availableSlots.length === 0 ? (
-                  <p className="text-sm text-red-500">No slots available.</p>
+                ) : slots.length === 0 ? (
+                  <p className="text-sm text-red-500">No slots found for this date.</p>
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
-                    {availableSlots.map((slot) => (
-                      <button
-                        key={slot.id}
-                        onClick={() => setSelectedNewSlotId(slot.id)}
-                        className={`py-2 text-sm border rounded hover:border-blue-500 transition ${
-                          selectedNewSlotId === slot.id
-                            ? 'bg-[#0b3b5e] text-white'
-                            : 'bg-gray-50'
-                        }`}
-                      >
-                        {slot.time}
-                      </button>
-                    ))}
+                    {slots.map((slot) => {
+                      const booked = !!slot.isBooked;
+
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          disabled={booked}
+                          onClick={() => !booked && setSelectedNewSlotId(slot.id)}
+                          className={`py-2 text-sm border rounded transition
+                            ${
+                              booked
+                                ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                : "bg-gray-50 hover:border-blue-500"
+                            }
+                            ${
+                              selectedNewSlotId === slot.id && !booked
+                                ? "bg-[#0b3b5e] text-white"
+                                : ""
+                            }`}
+                          title={booked ? "Booked" : "Available"}
+                        >
+                          {slot.time} {booked ? "(Booked)" : ""}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
+
             <button
               onClick={handleRescheduleSubmit}
               disabled={!selectedNewSlotId}
@@ -382,7 +383,7 @@ export default function MyAppointmentsPage() {
           </div>
         </Modal>
 
-        {/* === MODAL 2: REVIEW === */}
+        {/* MODAL 2: REVIEW */}
         <Modal
           isOpen={reviewModalOpen}
           onClose={() => setReviewModalOpen(false)}
@@ -396,17 +397,13 @@ export default function MyAppointmentsPage() {
                   <button
                     key={star}
                     type="button"
-                    onClick={() =>
-                      setReviewData({ ...reviewData, rating: star })
-                    }
+                    onClick={() => setReviewData({ ...reviewData, rating: star })}
                     className={`transition transform duration-150 ${
                       active
-                        ? 'text-yellow-400 scale-110 drop-shadow-sm'
-                        : 'text-gray-300 hover:text-yellow-300'
+                        ? "text-yellow-400 scale-110 drop-shadow-sm"
+                        : "text-gray-300 hover:text-yellow-300"
                     } hover:scale-125 focus:outline-none`}
-                    aria-label={`Rate ${star} star${
-                      star > 1 ? 's' : ''
-                    }`}
+                    aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
                   >
                     ★
                   </button>
@@ -415,10 +412,7 @@ export default function MyAppointmentsPage() {
             </div>
 
             <p className="text-center text-xs font-semibold text-gray-600 h-4">
-              <span
-                className="inline-block transition-transform duration-150 ease-out"
-                key={reviewData.rating}
-              >
+              <span className="inline-block transition-transform duration-150 ease-out" key={reviewData.rating}>
                 {ratingLabels[reviewData.rating]}
               </span>
             </p>
@@ -428,9 +422,7 @@ export default function MyAppointmentsPage() {
               rows="3"
               placeholder="Share a few words about your experience (optional)..."
               value={reviewData.comment}
-              onChange={(e) =>
-                setReviewData({ ...reviewData, comment: e.target.value })
-              }
+              onChange={(e) => setReviewData({ ...reviewData, comment: e.target.value })}
             />
 
             <button
