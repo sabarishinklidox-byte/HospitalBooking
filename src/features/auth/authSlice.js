@@ -2,8 +2,13 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
 
 // ✅ 1. READ FROM STORAGE IMMEDIATELY (Prevents refresh redirect issues)
-const storedToken = localStorage.getItem('token');
-const storedUser = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
+const storedToken = localStorage.getItem('token') || localStorage.getItem('authToken');
+const storedUser = localStorage.getItem('user') 
+  ? JSON.parse(localStorage.getItem('user')) 
+  : null;
+const storedClinic = localStorage.getItem('clinic') 
+  ? JSON.parse(localStorage.getItem('clinic')) 
+  : null;
 
 // SUPER ADMIN LOGIN
 export const loginSuperAdmin = createAsyncThunk(
@@ -11,7 +16,20 @@ export const loginSuperAdmin = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const res = await api.post('/super-admin/login', { email, password });
-      return res.data; 
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || { error: 'Login failed' });
+    }
+  }
+);
+
+// CLINIC ADMIN LOGIN
+export const loginClinicAdmin = createAsyncThunk(
+  'auth/loginClinicAdmin',
+  async ({ email, password }, { rejectWithValue }) => {
+    try {
+      const res = await api.post('/clinic/admin/login', { email, password });
+      return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
     }
@@ -24,7 +42,7 @@ export const loginDoctor = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const res = await api.post('/doctor/login', { email, password });
-      return res.data; 
+      return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
     }
@@ -37,7 +55,7 @@ export const loginUser = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const res = await api.post('/user/login', { email, password });
-      return res.data; 
+      return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
     }
@@ -47,8 +65,9 @@ export const loginUser = createAsyncThunk(
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: storedUser,  // ✅ Initialize with data from localStorage
+    user: storedUser, // ✅ Initialize with data from localStorage
     token: storedToken, // ✅ Initialize with data from localStorage
+    clinic: storedClinic, // ✅ NEW: Store clinic data for clinic admin
     loading: false,
     error: null,
   },
@@ -56,10 +75,13 @@ const authSlice = createSlice({
     logout(state) {
       state.user = null;
       state.token = null;
+      state.clinic = null;
       state.loading = false;
       state.error = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('clinic');
     },
     clearError(state) {
       state.error = null;
@@ -68,6 +90,11 @@ const authSlice = createSlice({
       state.user = action.payload;
       localStorage.setItem('user', JSON.stringify(action.payload));
     },
+    setClinic(state, action) {
+      // ✅ NEW: Action to set clinic data
+      state.clinic = action.payload;
+      localStorage.setItem('clinic', JSON.stringify(action.payload));
+    },
   },
   extraReducers: (builder) => {
     // Helper to handle successful login for ANY role
@@ -75,21 +102,46 @@ const authSlice = createSlice({
       state.loading = false;
       state.token = action.payload.token;
       state.user = action.payload.user;
+      
+      // ✅ NEW: If clinic data exists (clinic admin), store it
+      if (action.payload.clinic) {
+        state.clinic = action.payload.clinic;
+        localStorage.setItem('clinic', JSON.stringify(action.payload.clinic));
+      }
+      
       localStorage.setItem('token', action.payload.token);
+      localStorage.setItem('authToken', action.payload.token); // ✅ Support both keys
       localStorage.setItem('user', JSON.stringify(action.payload.user));
     };
 
     builder
       // SUPER ADMIN
-      .addCase(loginSuperAdmin.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(loginSuperAdmin.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(loginSuperAdmin.fulfilled, handleLoginSuccess)
       .addCase(loginSuperAdmin.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload?.error || 'Login failed';
       })
 
+      // ✅ NEW: CLINIC ADMIN
+      .addCase(loginClinicAdmin.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loginClinicAdmin.fulfilled, handleLoginSuccess)
+      .addCase(loginClinicAdmin.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.error || 'Login failed';
+      })
+
       // DOCTOR
-      .addCase(loginDoctor.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(loginDoctor.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(loginDoctor.fulfilled, handleLoginSuccess)
       .addCase(loginDoctor.rejected, (state, action) => {
         state.loading = false;
@@ -97,7 +149,10 @@ const authSlice = createSlice({
       })
 
       // USER
-      .addCase(loginUser.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(loginUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(loginUser.fulfilled, handleLoginSuccess)
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -106,5 +161,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, setUser } = authSlice.actions;
+export const { logout, clearError, setUser, setClinic } = authSlice.actions;
 export default authSlice.reducer;

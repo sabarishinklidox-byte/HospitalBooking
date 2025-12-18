@@ -12,10 +12,8 @@ export default function UserLogin() {
 
   const [form, setForm] = useState({ email: '', password: '' });
 
-  // Where to go after login (booking page or fallback)
   const origin = location.state?.from?.pathname || location.state?.from || '/';
 
-  // Redirect after successful login
   useEffect(() => {
     if (user) {
       toast.success(`Welcome back, ${user.name}!`);
@@ -55,18 +53,8 @@ export default function UserLogin() {
 
           {error && (
             <div className="mb-6 bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-lg flex items-center gap-2">
-              <svg
-                className="w-5 h-5 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {error}
             </div>
@@ -74,9 +62,7 @@ export default function UserLogin() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Email Address
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
               <input
                 name="email"
                 type="email"
@@ -89,9 +75,7 @@ export default function UserLogin() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Password
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
               <input
                 name="password"
                 type="password"
@@ -103,7 +87,6 @@ export default function UserLogin() {
               />
             </div>
 
-            {/* Forgot password row */}
             <div className="flex items-center justify-between">
               <span />
               <button
@@ -120,33 +103,7 @@ export default function UserLogin() {
               disabled={loading}
               className="w-full py-3.5 rounded-lg font-bold text-white bg-[#003366] hover:bg-[#002244] shadow-lg hover:shadow-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"
-                    />
-                  </svg>
-                  Signing In...
-                </>
-              ) : (
-                'Sign In'
-              )}
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
 
@@ -160,6 +117,43 @@ export default function UserLogin() {
               Sign up for free
             </Link>
           </p>
+
+          {/* Divider */}
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Or Login As
+            </span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          {/* Role-Based Login Buttons (New Tab) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              to="/super-admin/login"
+              target="_blank" // ✅ Opens in new tab
+              rel="noopener noreferrer" // ✅ Security best practice
+              className="w-full text-center py-3 rounded-lg border-2 border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 hover:border-blue-300 transition-all flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Admin
+            </Link>
+
+            <Link
+              to="/doctor/login"
+              target="_blank" // ✅ Opens in new tab
+              rel="noopener noreferrer" // ✅ Security best practice
+              className="w-full text-center py-3 rounded-lg border-2 border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100 hover:border-emerald-300 transition-all flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Doctor
+            </Link>
+          </div>
         </div>
       </div>
     </div>

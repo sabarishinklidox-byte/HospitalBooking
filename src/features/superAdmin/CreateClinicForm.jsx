@@ -5,6 +5,7 @@ import { ENDPOINTS } from "../../lib/endpoints";
 
 const INITIAL_FORM = {
   name: "",
+  phone: "", // ✅ Added phone field
   address: "",
   city: "",
   pincode: "",
@@ -13,7 +14,7 @@ const INITIAL_FORM = {
   logo: "",
   banner: "",
 
-  // ✅ new fields
+  // new fields
   planId: "",
   isActive: true,
   allowAuditView: false,
@@ -24,7 +25,7 @@ export default function CreateClinicForm({ onCreated }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState({ logo: false, banner: false });
 
-  // ✅ plans state
+  // plans state
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
 
@@ -35,11 +36,7 @@ export default function CreateClinicForm({ onCreated }) {
     const fetchPlans = async () => {
       try {
         setLoadingPlans(true);
-
-        // You may need to change this endpoint name:
-        // e.g. ENDPOINTS.SUPER_ADMIN.PLANS or ENDPOINTS.SUPER_ADMIN.SUBSCRIPTION_PLANS
         const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
-
         const list = res.data?.data || res.data || [];
         const active = list.filter((p) => p.isActive !== false);
 
@@ -93,10 +90,8 @@ export default function CreateClinicForm({ onCreated }) {
     }
   };
 
-  // optional UI gating (backend must also gate)
   const auditAllowedByPlan = selectedPlan?.enableAuditLogs !== false;
   useEffect(() => {
-    // if selected plan does not allow audit logs, force it off in UI
     if (selectedPlan && !auditAllowedByPlan && form.allowAuditView) {
       setForm((prev) => ({ ...prev, allowAuditView: false }));
     }
@@ -107,8 +102,9 @@ export default function CreateClinicForm({ onCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.name || !form.address || !form.city || !form.pincode) {
-      toast.error("Clinic Name, Address, City, and Pincode are required.");
+    // ✅ Validation updated
+    if (!form.name || !form.phone || !form.address || !form.city || !form.pincode) {
+      toast.error("Clinic Name, Phone, Address, City, and Pincode are required.");
       return;
     }
 
@@ -121,6 +117,7 @@ export default function CreateClinicForm({ onCreated }) {
     try {
       const payload = {
         name: form.name,
+        phone: form.phone, // ✅ Included in payload
         address: form.address,
         city: form.city,
         pincode: form.pincode,
@@ -129,7 +126,6 @@ export default function CreateClinicForm({ onCreated }) {
         logo: form.logo || undefined,
         banner: form.banner || undefined,
 
-        // ✅ new payload fields
         planId: form.planId,
         isActive: form.isActive,
         allowAuditView: form.allowAuditView,
@@ -159,7 +155,6 @@ export default function CreateClinicForm({ onCreated }) {
           <label className="block mb-1.5 text-sm font-bold text-gray-700">
             Select Plan*
           </label>
-
           <select
             name="planId"
             value={form.planId}
@@ -200,6 +195,22 @@ export default function CreateClinicForm({ onCreated }) {
             onChange={handleChange}
             required
             placeholder="e.g. City Care Hospital"
+          />
+        </div>
+
+        {/* ✅ Phone Number Field */}
+        <div className="md:col-span-2">
+          <label className="block mb-1.5 text-sm font-bold text-gray-700">
+            Phone Number*
+          </label>
+          <input
+            name="phone"
+            type="tel"
+            className="input w-full"
+            value={form.phone}
+            onChange={handleChange}
+            required
+            placeholder="e.g. +91 98765 43210"
           />
         </div>
 

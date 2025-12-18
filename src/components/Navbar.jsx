@@ -148,10 +148,12 @@ export default function Navbar() {
               <div className="flex items-center gap-3">
                 <Link
                   to="/login"
+                   state={{ from: location.pathname }}
                   className="px-5 py-2.5 text-sm font-bold text-gray-700 hover:text-[#003366] hover:bg-gray-50 rounded-lg transition-all"
                 >
                   Login
                 </Link>
+                      
                 <Link
                   to="/signup"
                   className="px-5 py-2.5 text-sm font-bold text-white bg-[#003366] hover:bg-[#002244] rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"

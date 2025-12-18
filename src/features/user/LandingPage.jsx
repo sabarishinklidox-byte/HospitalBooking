@@ -11,7 +11,7 @@ const ACCENT_COLOR = "#00bcd4";
 const DEFAULT_BANNER =
   "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=1200";
 const DEFAULT_LOGO =
-  "https://cdn-icons-png.flaticon.com/512/3304/3304555.png";
+  "https://cdn-icons-png.flaticon.com/128/4521/4521401.png";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -334,6 +334,40 @@ export default function LandingPage() {
                           </div>
                         )}
 
+                        {/* ✅ ADDED: Phone Number */}
+                        {clinic.phone && (
+                          <p
+                            className={`text-sm flex items-center gap-2 mb-4 ${
+                              isSelected ? "text-blue-200" : "text-gray-600"
+                            }`}
+                          >
+                            <svg
+                              className="w-4 h-4 shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                              ></path>
+                            </svg>
+                            <a
+                              href={`tel:${clinic.phone}`}
+                              className={`font-semibold hover:underline ${
+                                isSelected
+                                  ? "text-blue-100"
+                                  : "text-blue-600"
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {clinic.phone}
+                            </a>
+                          </p>
+                        )}
+
                         <p
                           className={`text-sm flex items-start gap-2 mb-4 ${
                             isSelected ? "text-blue-200" : "text-gray-500"
@@ -432,7 +466,7 @@ export default function LandingPage() {
           </div>
         ) : doctors.length === 0 ? (
           <motion.div
-            className="text-center py-20 bg.white rounded-3xl border-4 border-dashed border-gray-200 max-w-3xl mx-auto shadow-inner"
+            className="text-center py-20 bg-white rounded-3xl border-4 border-dashed border-gray-200 max-w-3xl mx-auto shadow-inner"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -462,7 +496,7 @@ export default function LandingPage() {
                 variants={fadeUp}
                 custom={idx}
                 whileHover={{ y: -4, scale: 1.01 }}
-                className="bg-white rounded-xl shadow-lg border border-gray-100 hover:shadow-2xl hover:border-[#003366]/30 transition-all duration-300 p-8 flex flex-col items-center textcenter group"
+                className="bg-white rounded-xl shadow-lg border border-gray-100 hover:shadow-2xl hover:border-[#003366]/30 transition-all duration-300 p-8 flex flex-col items-center text-center group"
               >
                 <div className="w-28 h-28 rounded-full bg-blue-100 flex items-center justify-center mb-6 overflow-hidden border-4 border-white shadow-xl group-hover:shadow-blue-300/50 group-hover:scale-105 transition-transform duration-500">
                   {doctor.avatar ? (

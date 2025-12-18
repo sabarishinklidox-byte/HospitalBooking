@@ -18,7 +18,7 @@ const toFullUrl = (url) => {
 const DEFAULT_BANNER =
   'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=1200';
 const DEFAULT_LOGO =
-  'https://cdn-icons-png.flaticon.com/512/3304/3304555.png';
+  'https://cdn-icons-png.flaticon.com/128/4521/4521401.png';
 
 const formatClinicTimings = (timings) => {
   if (!timings) return 'Timings not available';
@@ -59,7 +59,9 @@ export default function ClinicPublicPage() {
   if (loading)
     return (
       <UserLayout>
-        <Loader />
+        <div className="min-h-screen flex items-center justify-center">
+           <Loader />
+        </div>
       </UserLayout>
     );
 
@@ -83,7 +85,7 @@ export default function ClinicPublicPage() {
 
   return (
     <UserLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         {/* Clinic banner + logo header */}
         <div className="relative w-full mb-10">
           <div className="relative rounded-2xl overflow-hidden shadow-xl h-64 sm:h-80 w-full">
@@ -141,6 +143,33 @@ export default function ClinicPublicPage() {
                   </a>
                 )}
               </h1>
+
+              {/* Phone Number */}
+              {clinic.phone && (
+                <p className="flex items-center gap-2 text-sm text-gray-600 mb-2 font-medium">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    style={styleSecondaryText}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                    ></path>
+                  </svg>
+                  <a
+                    href={`tel:${clinic.phone}`}
+                    className="font-semibold hover:underline"
+                    style={stylePrimaryText}
+                  >
+                    {clinic.phone}
+                  </a>
+                </p>
+              )}
 
               <p className="flex items-center gap-2 text-sm text-gray-600 mb-2 font-medium">
                 <svg
@@ -206,9 +235,7 @@ export default function ClinicPublicPage() {
           {/* Doctors */}
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <span className="text-3xl" style={stylePrimaryText}>
-                👨‍⚕️
-              </span>
+              <span className="text-3xl">👨‍⚕️</span>
               Available Specialists
             </h2>
 

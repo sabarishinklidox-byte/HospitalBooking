@@ -10,6 +10,7 @@ import { ENDPOINTS } from "../../lib/endpoints";
 
 const INITIAL_CLINIC_FORM = {
   name: "",
+  phone: "", // ✅ NEW: Added phone field
   logo: "",
   banner: "",
   address: "",
@@ -23,7 +24,7 @@ const INITIAL_CLINIC_FORM = {
   isActive: true,
   allowAuditView: false,
 
-  // ✅ NEW: plan selection
+  // plan selection
   planId: "",
 };
 
@@ -40,7 +41,7 @@ export default function SuperAdminDashboard() {
   const [clinicSaving, setClinicSaving] = useState(false);
   const [uploading, setUploading] = useState({ logo: false, banner: false });
 
-  // ✅ plans state
+  // plans state
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
 
@@ -172,7 +173,8 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     setClinicSaving(true);
 
-    if (!clinicForm.name || !clinicForm.city || !clinicForm.address || !clinicForm.pincode) {
+    // ✅ Added phone to validation
+    if (!clinicForm.name || !clinicForm.phone || !clinicForm.city || !clinicForm.address || !clinicForm.pincode) {
       toast.error("Please fill all required fields (*)");
       setClinicSaving(false);
       return;
@@ -321,7 +323,7 @@ export default function SuperAdminDashboard() {
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ✅ Select Plan */}
+                {/* Select Plan */}
                 <div className="col-span-2">
                   <label className="text-sm font-semibold text-gray-700 block mb-1">
                     Select Plan*
@@ -361,6 +363,20 @@ export default function SuperAdminDashboard() {
                     onChange={handleClinicChange}
                     required
                     placeholder="e.g. City Care Hospital"
+                  />
+                </div>
+                
+                {/* ✅ Added Phone Number Field */}
+                <div className="col-span-2">
+                  <label className="text-sm font-semibold text-gray-700 block mb-1">Phone Number*</label>
+                  <input
+                    name="phone"
+                    type="tel"
+                    className="input w-full"
+                    value={clinicForm.phone}
+                    onChange={handleClinicChange}
+                    required
+                    placeholder="e.g. +91 98765 43210"
                   />
                 </div>
 
