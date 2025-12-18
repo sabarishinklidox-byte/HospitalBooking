@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           // 2. Use the loaded 'env' object here, NOT import.meta.env
-          target: env.VITE_API_URL || 'http://localhost:5000', 
+          target: env.VITE_API_URL, 
           changeOrigin: true,
           secure: false,
         }

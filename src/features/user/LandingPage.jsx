@@ -13,7 +13,7 @@ const DEFAULT_BANNER =
 const DEFAULT_LOGO =
   "https://cdn-icons-png.flaticon.com/128/4521/4521401.png";
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  import.meta.env.VITE_API_BASE_URL ;
 
 const formatClinicTimings = (timings) => {
   if (!timings) return "Timings not available";

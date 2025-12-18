@@ -11,7 +11,7 @@
   import { ENDPOINTS } from '../../lib/endpoints';
 
   // API base + helper to build full URLs
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   const toFullUrl = (url) => {
     if (!url) return null;
