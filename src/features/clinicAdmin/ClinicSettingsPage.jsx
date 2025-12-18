@@ -260,7 +260,7 @@ const handleAutoFillGooglePlace = async () => {
 
   return (
     <ClinicAdminLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <div className="mx-auto px-4 sm:px-6 py-8">
         {/* Page Header */}
         <div className="mb-8 border-b border-gray-100 pb-5">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">

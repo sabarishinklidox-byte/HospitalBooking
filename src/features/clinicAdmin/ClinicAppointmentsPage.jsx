@@ -48,7 +48,7 @@ export default function ClinicAppointmentsPage() {
 
   return (
     <ClinicAdminLayout>
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-1">Appointments</h1>
         <p className="text-sm text-gray-500 mb-4">
           View, reschedule and update appointment status.

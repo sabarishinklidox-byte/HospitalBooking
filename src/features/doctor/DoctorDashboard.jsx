@@ -33,7 +33,7 @@ export default function DoctorDashboard() {
 
   return (
     <DoctorLayout>
-      <div className="max-w-6xl mx-auto">
+      <div className=" mx-auto">
         <h1 className="text-3xl font-bold text-[#0b3b5e] mb-2">Welcome Back!</h1>
         <p className="text-gray-600 mb-8">
           Here's what's happening with your appointments today, {new Date().toLocaleDateString()}.

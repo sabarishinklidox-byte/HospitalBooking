@@ -65,7 +65,7 @@ export default function BillingPage() {
 
   return (
     <ClinicAdminLayout>
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">

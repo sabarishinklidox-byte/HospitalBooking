@@ -83,7 +83,7 @@ export default function DoctorProfilePage() {
 
   return (
     <DoctorLayout>
-      <div className="max-w-3xl mx-auto">
+      <div className=" mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-[#0b3b5e]">My Profile</h1>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

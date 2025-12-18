@@ -163,7 +163,7 @@ export default function SlotsPage() {
 
   return (
     <ClinicAdminLayout>
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
+      <div className="mx-auto p-6 space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <span>🗓️</span> Manage Slots
