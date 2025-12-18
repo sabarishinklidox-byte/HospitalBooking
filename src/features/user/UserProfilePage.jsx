@@ -4,7 +4,7 @@ import api from '../../lib/api';
 import UserLayout from '../../layouts/UserLayout.jsx';
 import { setUser } from '../../features/auth/authSlice';
 import { toast } from 'react-hot-toast';
-
+ import { ENDPOINTS } from '../../lib/endpoints';
 export default function UserProfilePage() {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { logout } from '../features/auth/authSlice';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { logout } from "../features/auth/authSlice";
 
 export default function Navbar() {
   const { user } = useSelector((state) => state.auth);
@@ -11,11 +11,15 @@ export default function Navbar() {
 
   const handleLogout = () => {
     dispatch(logout());
-    navigate('/login');
+    navigate("/login");
     setIsMobileMenuOpen(false);
   };
 
-  const isClinicAdmin = user && user.role === 'ADMIN';
+  const isClinicAdmin = user?.role === "ADMIN";
+
+  const safeName = user?.name || "User";
+  const safeEmail = user?.email || "";
+  const safeRoleLabel = (user?.role ?? "USER").toLowerCase(); // ✅ prevents crash
 
   return (
     <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all">
@@ -54,6 +58,7 @@ export default function Navbar() {
                   </svg>
                   Appointments
                 </Link>
+
                 <Link
                   to="/profile"
                   className="text-sm font-semibold text-gray-600 hover:text-[#003366] flex items-center gap-2 transition-colors"
@@ -73,6 +78,7 @@ export default function Navbar() {
                   </svg>
                   Profile
                 </Link>
+
                 {isClinicAdmin && (
                   <Link
                     to="/admin/dashboard"
@@ -105,18 +111,19 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* RIGHT: USER ACTIONS */}
+          {/* RIGHT: USER ACTIONS (DESKTOP) */}
           <div className="hidden md:flex items-center gap-4">
             {user ? (
               <div className="flex items-center gap-4 pl-6 border-l border-gray-200 h-10">
                 <div className="flex flex-col items-end">
                   <span className="text-sm font-bold text-gray-900 leading-none">
-                    {user.name}
+                    {safeName}
                   </span>
                   <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded mt-1">
-                    {user.role.toLowerCase()}
+                    {safeRoleLabel}
                   </span>
                 </div>
+
                 <button
                   onClick={handleLogout}
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -196,11 +203,14 @@ export default function Navbar() {
               <>
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl mb-4 border border-blue-100">
                   <div className="w-10 h-10 bg-[#003366] rounded-full flex items-center justify-center text-white font-bold">
-                    {user.name.charAt(0)}
+                    {(safeName?.[0] || "U").toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                    <p className="font-bold text-gray-900">{safeName}</p>
+                    <p className="text-xs text-gray-500">{safeEmail}</p>
+                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mt-1">
+                      {safeRoleLabel}
+                    </p>
                   </div>
                 </div>
 
@@ -211,6 +221,7 @@ export default function Navbar() {
                 >
                   <span>📅</span> My Appointments
                 </Link>
+
                 <Link
                   to="/profile"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -218,6 +229,7 @@ export default function Navbar() {
                 >
                   <span>👤</span> Profile
                 </Link>
+
                 {isClinicAdmin && (
                   <Link
                     to="/admin/dashboard"
@@ -227,6 +239,7 @@ export default function Navbar() {
                     <span>📊</span> Clinic Admin
                   </Link>
                 )}
+
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-red-600 hover:bg-red-50"

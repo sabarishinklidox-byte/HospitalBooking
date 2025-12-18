@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "../../lib/api";
 import UserLayout from "../../layouts/UserLayout.jsx";
 import Loader from "../../components/Loader.jsx";
@@ -17,17 +17,13 @@ export default function MyAppointmentsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    totalPages: 1,
-    total: 0,
-  });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
 
   // --- RESCHEDULE STATE ---
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [newDate, setNewDate] = useState("");
-  const [slots, setSlots] = useState([]); // ✅ keep ALL slots (booked + unbooked)
+  const [slots, setSlots] = useState([]); // show all slots (booked + unbooked)
   const [selectedNewSlotId, setSelectedNewSlotId] = useState(null);
   const [slotLoading, setSlotLoading] = useState(false);
 
@@ -45,7 +41,6 @@ export default function MyAppointmentsPage() {
     dateTo: dateTo || undefined,
   });
 
-  // 1) Fetch appointments
   const fetchAppointments = async () => {
     try {
       setLoading(true);
@@ -74,7 +69,12 @@ export default function MyAppointmentsPage() {
     if (newPage >= 1 && newPage <= pagination.totalPages) setPage(newPage);
   };
 
-  // 2) Reschedule handlers
+  // ---------- RESCHEDULE ----------
+  const getClinicId = (appt) => {
+    // ✅ adjust this according to your backend response shape
+    return appt?.clinicId || appt?.clinic?.id || appt?.slot?.clinicId || appt?.slot?.clinic?.id || null;
+  };
+
   const openReschedule = (appt) => {
     setSelectedAppt(appt);
     setNewDate("");
@@ -83,35 +83,42 @@ export default function MyAppointmentsPage() {
     setRescheduleModalOpen(true);
   };
 
-  // ✅ Fetch slots for reschedule (this is the main FIX)
+  // If you want, pre-fill date with current appointment date:
+  // useEffect(() => { if (rescheduleModalOpen && selectedAppt?.slot?.date) setNewDate(selectedAppt.slot.date.slice(0,10)); }, [rescheduleModalOpen, selectedAppt]);
+
   useEffect(() => {
     if (!newDate || !selectedAppt) return;
 
+    const controller = new AbortController();
+
     const fetchSlots = async () => {
-      // ✅ clinicId MUST exist in selectedAppt (backend should return it)
-      const clinicId = selectedAppt.clinicId ?? selectedAppt.clinic?.id;
-      const doctorId = selectedAppt.doctor?.id;
-
-      if (!clinicId || !doctorId) {
-        toast.error("Missing clinicId/doctorId in appointment data.");
-        return;
-      }
-
       setSlotLoading(true);
       try {
+        const clinicId = getClinicId(selectedAppt);
+        const doctorId = selectedAppt?.doctor?.id;
+
+        if (!clinicId || !doctorId) {
+          toast.error("Missing clinicId/doctorId for slots fetch");
+          setSlots([]);
+          return;
+        }
+
+        // ✅ Use USER.SLOTS (same idea as booking page) so `isBooked` is available
         const res = await api.get(ENDPOINTS.USER.SLOTS, {
+          signal: controller.signal,
           params: {
             clinicId,
             doctorId,
             date: newDate,
-            // If you later add backend support:
+            // Optional: if backend supports it, it will treat current appt as excluded from conflict checks:
             // excludeAppointmentId: selectedAppt.id,
           },
         });
 
-        // backend returns { data: [...] }
-        setSlots(res.data?.data ?? []);
+        const data = res.data?.data ?? res.data ?? [];
+        setSlots(Array.isArray(data) ? data : []);
       } catch (err) {
+        if (err?.name === "CanceledError") return;
         console.error(err);
         toast.error("Failed to load slots for selected date");
       } finally {
@@ -120,7 +127,10 @@ export default function MyAppointmentsPage() {
     };
 
     fetchSlots();
+    return () => controller.abort();
   }, [newDate, selectedAppt]);
+
+  const currentSlotId = useMemo(() => selectedAppt?.slot?.id ?? null, [selectedAppt]);
 
   const handleRescheduleSubmit = async () => {
     if (!selectedNewSlotId) {
@@ -130,9 +140,7 @@ export default function MyAppointmentsPage() {
 
     try {
       await toast.promise(
-        api.patch(ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id), {
-          newSlotId: selectedNewSlotId,
-        }),
+        api.patch(ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id), { newSlotId: selectedNewSlotId }),
         {
           loading: "Rescheduling your appointment...",
           success: "Appointment rescheduled successfully!",
@@ -147,7 +155,7 @@ export default function MyAppointmentsPage() {
     }
   };
 
-  // 3) Cancel handler
+  // ---------- CANCEL ----------
   const handleCancel = async (appt) => {
     const isOnlinePay = appt.slot?.paymentMode === "ONLINE";
 
@@ -165,8 +173,7 @@ export default function MyAppointmentsPage() {
       await toast.promise(api.post(ENDPOINTS.USER.CANCEL_APPOINTMENT(appt.id), { reason }), {
         loading: isOnlinePay ? "Submitting cancellation request..." : "Cancelling appointment...",
         success: (res) =>
-          res.data?.message ||
-          (isOnlinePay ? "Cancellation request sent to clinic." : "Appointment cancelled."),
+          res.data?.message || (isOnlinePay ? "Cancellation request sent to clinic." : "Appointment cancelled."),
         error: (err) => err.response?.data?.error || "Failed to cancel appointment",
       });
 
@@ -176,7 +183,7 @@ export default function MyAppointmentsPage() {
     }
   };
 
-  // 4) Review handlers
+  // ---------- REVIEW ----------
   const openReviewModal = (appt) => {
     setSelectedReviewAppt(appt);
     setReviewData({ rating: 5, comment: "" });
@@ -205,13 +212,7 @@ export default function MyAppointmentsPage() {
     }
   };
 
-  const ratingLabels = {
-    1: "Very poor",
-    2: "Below average",
-    3: "Average",
-    4: "Very good",
-    5: "Excellent",
-  };
+  const ratingLabels = { 1: "Very poor", 2: "Below average", 3: "Average", 4: "Very good", 5: "Excellent" };
 
   return (
     <UserLayout>
@@ -236,6 +237,8 @@ export default function MyAppointmentsPage() {
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="NO_SHOW">No-show</option>
+              {/* if you have this status */}
+              <option value="CANCEL_REQUESTED">Cancel requested</option>
             </select>
           </div>
 
@@ -310,12 +313,8 @@ export default function MyAppointmentsPage() {
           </>
         )}
 
-        {/* MODAL 1: RESCHEDULE */}
-        <Modal
-          isOpen={rescheduleModalOpen}
-          onClose={() => setRescheduleModalOpen(false)}
-          title="Reschedule Appointment"
-        >
+        {/* === MODAL 1: RESCHEDULE === */}
+        <Modal isOpen={rescheduleModalOpen} onClose={() => setRescheduleModalOpen(false)} title="Reschedule Appointment">
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
               Select a new date for <strong>Dr. {selectedAppt?.doctor?.name}</strong>
@@ -328,7 +327,10 @@ export default function MyAppointmentsPage() {
                 className="input w-full border p-2 rounded"
                 min={new Date().toISOString().split("T")[0]}
                 value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
+                onChange={(e) => {
+                  setSelectedNewSlotId(null);
+                  setNewDate(e.target.value);
+                }}
               />
             </div>
 
@@ -339,32 +341,44 @@ export default function MyAppointmentsPage() {
                 {slotLoading ? (
                   <p className="text-xs text-gray-400">Loading...</p>
                 ) : slots.length === 0 ? (
-                  <p className="text-sm text-red-500">No slots found for this date.</p>
+                  <p className="text-sm text-red-500">No slots found.</p>
                 ) : (
                   <div className="grid grid-cols-3 gap-2">
                     {slots.map((slot) => {
                       const booked = !!slot.isBooked;
 
+                      // ✅ allow selecting current appointment slot even if booked (self-booked)
+                      const isMyCurrentSlot = currentSlotId && slot.id === currentSlotId;
+                      const disabled = booked && !isMyCurrentSlot;
+
                       return (
                         <button
                           key={slot.id}
                           type="button"
-                          disabled={booked}
-                          onClick={() => !booked && setSelectedNewSlotId(slot.id)}
+                          disabled={disabled}
+                          onClick={() => {
+                            if (!disabled) setSelectedNewSlotId(slot.id);
+                          }}
                           className={`py-2 text-sm border rounded transition
                             ${
-                              booked
+                              selectedNewSlotId === slot.id
+                                ? "bg-[#0b3b5e] text-white border-[#0b3b5e]"
+                                : disabled
                                 ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                : booked && isMyCurrentSlot
+                                ? "bg-blue-50 text-blue-700 border-blue-200"
                                 : "bg-gray-50 hover:border-blue-500"
-                            }
-                            ${
-                              selectedNewSlotId === slot.id && !booked
-                                ? "bg-[#0b3b5e] text-white"
-                                : ""
                             }`}
-                          title={booked ? "Booked" : "Available"}
+                          title={
+                            isMyCurrentSlot
+                              ? "Current slot (yours)"
+                              : booked
+                              ? "Booked"
+                              : "Available"
+                          }
                         >
-                          {slot.time} {booked ? "(Booked)" : ""}
+                          {slot.time}{" "}
+                          {isMyCurrentSlot ? "(Current)" : booked ? "(Booked)" : ""}
                         </button>
                       );
                     })}
@@ -383,12 +397,8 @@ export default function MyAppointmentsPage() {
           </div>
         </Modal>
 
-        {/* MODAL 2: REVIEW */}
-        <Modal
-          isOpen={reviewModalOpen}
-          onClose={() => setReviewModalOpen(false)}
-          title="Rate Your Experience"
-        >
+        {/* === MODAL 2: REVIEW === */}
+        <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Rate Your Experience">
           <div className="flex flex-col items-center gap-3">
             <div className="flex gap-1.5 justify-center text-3xl py-2">
               {[1, 2, 3, 4, 5].map((star) => {
@@ -399,9 +409,7 @@ export default function MyAppointmentsPage() {
                     type="button"
                     onClick={() => setReviewData({ ...reviewData, rating: star })}
                     className={`transition transform duration-150 ${
-                      active
-                        ? "text-yellow-400 scale-110 drop-shadow-sm"
-                        : "text-gray-300 hover:text-yellow-300"
+                      active ? "text-yellow-400 scale-110 drop-shadow-sm" : "text-gray-300 hover:text-yellow-300"
                     } hover:scale-125 focus:outline-none`}
                     aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
                   >

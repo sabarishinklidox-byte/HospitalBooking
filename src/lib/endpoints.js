@@ -16,6 +16,7 @@ export const ENDPOINTS = {
     PLANS: '/public/plans',
      GOOGLE_PLACE_ID: "/public/google/place-id",
      ORGANIZATION_REGISTER: "/public/organizations/register",
+     SLOTS: '/public/slots',
   },
 
  USER: {
@@ -25,11 +26,12 @@ export const ENDPOINTS = {
   APPOINTMENT_BY_ID: (id) => `/user/appointments/${id}`,
   PROFILE: '/user/profile',
   HISTORY: '/user/history',
-  SLOTS: '/user/slots', // ✅ ADD THIS
+   // ✅ ADD THIS
   CANCEL_APPOINTMENT: (id) => `/user/appointments/${id}/cancel`,
   RESCHEDULE_APPOINTMENT: (id) => `/user/appointments/${id}/reschedule`,
   REVIEWS: '/user/reviews',
   DOCTOR_REVIEWS: (doctorId) => `/user/doctors/${doctorId}/reviews`,
+   SLOTS: '/user/slots'
 },
 
 
@@ -101,7 +103,7 @@ NOTIFICATIONS_MARK_READ_BY_ENTITY: '/admin/notifications/mark-read-by-entity',
 SUPER_ADMIN: {
   SETUP: '/super-admin/setup',
   LOGIN: '/super-admin/login',
-
+  PLANS: "/public/plans", 
   CLINICS: '/super-admin/clinics',
   CLINIC_BY_ID: (id) => `/super-admin/clinics/${id}`,
   CLINIC_STATUS: (clinicId) => `/super-admin/clinics/${clinicId}/status`,

@@ -1,14 +1,14 @@
 // src/features/admin/SlotsPage.jsx
-import React, { useEffect, useState } from 'react';
-import api from '../../lib/api';
-import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
-import Loader from '../../components/Loader.jsx';
-import Modal from '../../components/Modal.jsx';
-import BulkSlotCreator from './BulkSlotCreator';
-import toast from 'react-hot-toast';
-import { ENDPOINTS } from '../../lib/endpoints';
+import React, { useEffect, useState } from "react";
+import api from "../../lib/api";
+import ClinicAdminLayout from "../../layouts/ClinicAdminLayout.jsx";
+import Loader from "../../components/Loader.jsx";
+import Modal from "../../components/Modal.jsx";
+import BulkSlotCreator from "./BulkSlotCreator";
+import toast from "react-hot-toast";
+import { ENDPOINTS } from "../../lib/endpoints";
 
-const today = new Date().toISOString().split('T')[0];
+const today = new Date().toISOString().split("T")[0];
 
 export default function SlotsPage() {
   const [slots, setSlots] = useState([]);
@@ -16,25 +16,24 @@ export default function SlotsPage() {
   const [doctors, setDoctors] = useState([]);
 
   // Filters
-  const [doctorId, setDoctorId] = useState('');
+  const [doctorId, setDoctorId] = useState("");
   const [selectedDate, setSelectedDate] = useState(today);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState(null);
 
-  // Form (includes kind)
+  // Form
   const [form, setForm] = useState({
-    doctorId: '',
+    doctorId: "",
     date: today,
-    time: '',
-    duration: '30',
-    price: '500',
-    paymentMode: 'ONLINE',
-    kind: 'APPOINTMENT', // APPOINTMENT | BREAK
+    time: "",
+    duration: "30",
+    price: "500",
+    paymentMode: "ONLINE",
+    kind: "APPOINTMENT", // APPOINTMENT | BREAK
   });
 
-  // Data fetching
   const fetchDoctors = async () => {
     try {
       const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
@@ -44,7 +43,7 @@ export default function SlotsPage() {
         setDoctorId(activeDoctors[0].id);
       }
     } catch {
-      toast.error('Failed to load doctors');
+      toast.error("Failed to load doctors");
     }
   };
 
@@ -60,7 +59,7 @@ export default function SlotsPage() {
       });
       setSlots(res.data || []);
     } catch {
-      toast.error('Failed to load slots');
+      toast.error("Failed to load slots");
     } finally {
       setLoading(false);
     }
@@ -68,10 +67,12 @@ export default function SlotsPage() {
 
   useEffect(() => {
     fetchDoctors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     fetchSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId, selectedDate]);
 
   // Open create modal
@@ -80,26 +81,32 @@ export default function SlotsPage() {
     setForm({
       doctorId,
       date: selectedDate,
-      time: '',
-      duration: '30',
-      price: '500',
-      paymentMode: 'ONLINE',
-      kind: 'APPOINTMENT',
+      time: "",
+      duration: "30",
+      price: "500",
+      paymentMode: "ONLINE",
+      kind: "APPOINTMENT",
     });
     setModalOpen(true);
   };
 
   // Open edit modal
   const handleEditSlot = (slot) => {
+    const kind = slot.kind || "APPOINTMENT";
+    const paymentMode =
+      kind === "BREAK" ? "FREE" : slot.paymentMode || "ONLINE";
+    const price =
+      kind === "BREAK" ? "0" : String(slot.price ?? 0);
+
     setEditingSlotId(slot.id);
     setForm({
       doctorId: slot.doctorId,
-      date: slot.date.split('T')[0],
+      date: slot.date.split("T")[0],
       time: slot.time,
       duration: String(slot.duration),
-      price: String(slot.price),
-      paymentMode: slot.paymentMode || 'ONLINE',
-      kind: slot.kind || 'APPOINTMENT',
+      price,
+      paymentMode,
+      kind,
     });
     setModalOpen(true);
   };
@@ -108,10 +115,14 @@ export default function SlotsPage() {
   const handleCreateOrUpdateSlot = async (e) => {
     e.preventDefault();
 
+    const isBreak = form.kind === "BREAK";
+
+    // ✅ enforce again before sending payload
     const payload = {
       ...form,
       duration: Number(form.duration),
-      price: Number(form.price || 0),
+      price: isBreak ? 0 : Number(form.price || 0),
+      paymentMode: isBreak ? "FREE" : form.paymentMode,
     };
 
     const promise = editingSlotId
@@ -119,45 +130,36 @@ export default function SlotsPage() {
       : api.post(ENDPOINTS.ADMIN.SLOTS, payload);
 
     await toast.promise(promise, {
-      loading: editingSlotId ? 'Updating slot...' : 'Creating slot...',
+      loading: editingSlotId ? "Updating slot..." : "Creating slot...",
       success: () => {
         setModalOpen(false);
         fetchSlots();
-        return `Slot ${editingSlotId ? 'updated' : 'created'} successfully!`;
+        return `Slot ${editingSlotId ? "updated" : "created"} successfully!`;
       },
-      error: (err) => err.response?.data?.error || 'Failed to save slot',
+      error: (err) => err.response?.data?.error || "Failed to save slot",
     });
   };
 
   // Delete
-  // Delete
-const handleDeleteSlot = async (id) => {
-  if (
-    !window.confirm(
-      'Are you sure you want to permanently delete this slot?'
-    )
-  )
-    return;
+  const handleDeleteSlot = async (id) => {
+    if (!window.confirm("Are you sure you want to permanently delete this slot?")) return;
 
-  try {
-    await toast.promise(
-      api.delete(ENDPOINTS.ADMIN.SLOT_BY_ID(id)),
-      {
-        loading: 'Deleting slot...',
+    try {
+      await toast.promise(api.delete(ENDPOINTS.ADMIN.SLOT_BY_ID(id)), {
+        loading: "Deleting slot...",
         success: () => {
           fetchSlots();
-          return 'Slot deleted.';
+          return "Slot deleted.";
         },
-        // let backend message show (e.g. "Cannot delete this slot because it has active bookings...")
-        error: (err) => err.response?.data?.error || 'Failed to delete slot.',
-      }
-    );
-  } catch (err) {
-    // toast.promise error already handled; this is just a safety net
-    const msg = err.response?.data?.error || 'Failed to delete slot.';
-    toast.error(msg);
-  }
-};
+        error: (err) => err.response?.data?.error || "Failed to delete slot.",
+      });
+    } catch (err) {
+      const msg = err.response?.data?.error || "Failed to delete slot.";
+      toast.error(msg);
+    }
+  };
+
+  const isBreak = form.kind === "BREAK";
 
   return (
     <ClinicAdminLayout>
@@ -167,8 +169,7 @@ const handleDeleteSlot = async (id) => {
             <span>🗓️</span> Manage Slots
           </h1>
           <p className="text-gray-500 mt-2 ml-1">
-            Create and manage individual or bulk appointment slots for your
-            doctors.
+            Create and manage individual or bulk appointment slots for your doctors.
           </p>
         </div>
 
@@ -194,6 +195,7 @@ const handleDeleteSlot = async (id) => {
                 ))}
               </select>
             </div>
+
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">
                 Select Date
@@ -238,12 +240,9 @@ const handleDeleteSlot = async (id) => {
             </div>
           ) : slots.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-dashed border-2 border-gray-200">
-              <p className="font-medium text-gray-600">
-                No slots found for this day.
-              </p>
+              <p className="font-medium text-gray-600">No slots found for this day.</p>
               <p className="text-sm text-gray-400 mt-1">
-                Use the "Add Single Slot" or "Bulk Create" buttons to generate
-                them.
+                Use the "Add Single Slot" or "Bulk Create" buttons to generate them.
               </p>
             </div>
           ) : (
@@ -266,51 +265,45 @@ const handleDeleteSlot = async (id) => {
                       <td className="px-4 py-3 font-mono font-bold text-gray-800">
                         {slot.time}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {slot.duration} mins
-                      </td>
+                      <td className="px-4 py-3 text-gray-600">{slot.duration} mins</td>
                       <td className="px-4 py-3">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.kind === 'BREAK'
-                              ? 'bg-gray-200 text-gray-800'
-                              : 'bg-indigo-100 text-indigo-800'
+                            slot.kind === "BREAK"
+                              ? "bg-gray-200 text-gray-800"
+                              : "bg-indigo-100 text-indigo-800"
                           }`}
                         >
-                          {slot.kind === 'BREAK' ? 'Break / Lunch' : 'Appointment'}
+                          {slot.kind === "BREAK" ? "Break / Lunch" : "Appointment"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.paymentMode === 'FREE'
-                              ? 'bg-green-100 text-green-800'
-                              : slot.paymentMode === 'ONLINE'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-orange-100 text-orange-800'
+                            slot.paymentMode === "FREE"
+                              ? "bg-green-100 text-green-800"
+                              : slot.paymentMode === "ONLINE"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-orange-100 text-orange-800"
                           }`}
                         >
-                          {slot.paymentMode === 'ONLINE'
-                            ? 'Online Only'
-                            : slot.paymentMode === 'OFFLINE'
-                            ? 'Pay at Clinic'
-                            : 'Free'}
+                          {slot.paymentMode === "ONLINE"
+                            ? "Online Only"
+                            : slot.paymentMode === "OFFLINE"
+                              ? "Pay at Clinic"
+                              : "Free"}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-semibold text-green-700">
-                        {slot.paymentMode === 'FREE'
-                          ? 'Free'
-                          : `₹${slot.price}`}
+                        {slot.paymentMode === "FREE" ? "Free" : `₹${slot.price}`}
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.isBooked
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-cyan-100 text-cyan-800'
+                            slot.isBooked ? "bg-red-100 text-red-800" : "bg-cyan-100 text-cyan-800"
                           }`}
                         >
-                          {slot.isBooked ? 'Booked' : 'Available'}
+                          {slot.isBooked ? "Booked" : "Available"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
@@ -341,20 +334,16 @@ const handleDeleteSlot = async (id) => {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingSlotId ? 'Edit Slot' : 'Create New Slot'}
+        title={editingSlotId ? "Edit Slot" : "Create New Slot"}
       >
         <form onSubmit={handleCreateOrUpdateSlot} className="space-y-4 p-1">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Time
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
             <input
               type="time"
               className="input w-full"
               value={form.time}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, time: e.target.value }))
-              }
+              onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
               required
             />
           </div>
@@ -369,69 +358,74 @@ const handleDeleteSlot = async (id) => {
                 min="10"
                 className="input w-full"
                 value={form.duration}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, duration: e.target.value }))
-                }
+                onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
                 required
               />
             </div>
+
+            {/* ✅ Price only makes sense for APPOINTMENT and non-FREE */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Price (₹)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
               <input
                 type="number"
                 min="0"
                 className="input w-full"
-                value={form.price}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, price: e.target.value }))
-                }
-                required={form.paymentMode !== 'FREE'}
-                disabled={form.paymentMode === 'FREE'}
+                value={isBreak ? "0" : form.price}
+                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                disabled={isBreak || form.paymentMode === "FREE"}
+                required={!isBreak && form.paymentMode !== "FREE"}
               />
             </div>
           </div>
 
           {/* Slot type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Slot Type
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Slot Type</label>
             <select
               className="input w-full bg-white"
               value={form.kind}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, kind: e.target.value }))
-              }
+              onChange={(e) => {
+                const kind = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  kind,
+                  ...(kind === "BREAK" ? { paymentMode: "FREE", price: "0" } : {}),
+                }));
+              }}
             >
               <option value="APPOINTMENT">Appointment</option>
               <option value="BREAK">Break / Lunch</option>
             </select>
           </div>
 
-          {/* Payment mode */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Mode
-            </label>
-            <select
-              className="input w-full bg-white"
-              value={form.paymentMode}
-              onChange={(e) => {
-                const mode = e.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  paymentMode: mode,
-                  price: mode === 'FREE' ? '0' : prev.price,
-                }));
-              }}
-            >
-              <option value="ONLINE">Online Payment Only</option>
-              <option value="OFFLINE">Pay at Clinic (Cash Only)</option>
-              <option value="FREE">Free Slot</option>
-            </select>
-          </div>
+          {/* Payment mode (hidden for BREAK) */}
+          {!isBreak && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+              <select
+                className="input w-full bg-white"
+                value={form.paymentMode}
+                onChange={(e) => {
+                  const mode = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    paymentMode: mode,
+                    price: mode === "FREE" ? "0" : prev.price,
+                  }));
+                }}
+              >
+                <option value="ONLINE">Online Payment Only</option>
+                <option value="OFFLINE">Pay at Clinic (Cash Only)</option>
+                <option value="FREE">Free Slot</option>
+              </select>
+            </div>
+          )}
+
+          {isBreak && (
+            <div className="text-xs text-gray-500">
+              Break slots are always Free (no payment mode / price).
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <button
@@ -442,7 +436,7 @@ const handleDeleteSlot = async (id) => {
               Cancel
             </button>
             <button type="submit" className="btn-primary py-2 px-5">
-              {editingSlotId ? 'Update Slot' : 'Create Slot'}
+              {editingSlotId ? "Update Slot" : "Create Slot"}
             </button>
           </div>
         </form>
