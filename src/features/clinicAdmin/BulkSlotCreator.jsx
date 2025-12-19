@@ -1,4 +1,3 @@
-// src/features/admin/BulkSlotCreator.jsx
 import React, { useMemo, useState } from "react";
 import api from "../../lib/api";
 import toast from "react-hot-toast";
@@ -13,11 +12,14 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
     doctorId: "",
     startDate: "",
     endDate: "",
-    startTime: "09:00",
+    startTime: "09:00", // Shift Start
+    endTime: "17:00",   // Shift End (NEW)
     duration: "30",
     days: [1, 2, 3, 4, 5],
     paymentMode: "ONLINE",
-    kind: "APPOINTMENT", // APPOINTMENT | BREAK
+    kind: "APPOINTMENT",
+    lunchStart: "",     // NEW (Optional)
+    lunchEnd: "",       // NEW (Optional)
   });
 
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    // ✅ If BREAK, force FREE like single slot logic
+    // Force FREE if BREAK
     if (name === "kind") {
       setFormData((prev) => ({
         ...prev,
@@ -69,10 +71,11 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
     if (!formData.doctorId) return toast.error("Please select a doctor");
     if (!formData.startDate || !formData.endDate)
       return toast.error("Please select a date range");
-    if (!formData.startTime) return toast.error("Please select start time");
-    if (!formData.duration) return toast.error("Please select duration");
-    if (!formData.days?.length)
-      return toast.error("Please select at least one day");
+    if (!formData.startTime || !formData.endTime) 
+      return toast.error("Please select shift start and end time");
+    
+    if (formData.lunchStart && !formData.lunchEnd)
+        return toast.error("Lunch End Time is required if Start Time is set");
 
     const loadingToastId = toast.loading("Creating slots...");
     setLoading(true);
@@ -121,6 +124,8 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* Row 1: Doctor & Duration */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -161,8 +166,9 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
           </div>
         </div>
 
+        {/* Row 2: Date Range */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="relative">
+          <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
               Start Date
             </label>
@@ -172,11 +178,11 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
               required
               value={formData.startDate}
               onChange={handleInputChange}
-              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer shadow-sm hover:border-gray-400 transition-colors"
+              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer shadow-sm hover:border-gray-400"
             />
           </div>
 
-          <div className="relative">
+          <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
               End Date
             </label>
@@ -186,26 +192,76 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
               required
               value={formData.endDate}
               onChange={handleInputChange}
-              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer shadow-sm hover:border-gray-400 transition-colors"
+              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer shadow-sm hover:border-gray-400"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Row 3: Shift Times (Full Day) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-blue-50/50 p-4 rounded-lg border border-blue-100">
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
-              Slot Start Time
+            <label className="block text-xs font-bold text-blue-800 mb-1">
+               Start Time (Shift Start)
             </label>
             <input
               type="time"
               name="startTime"
               required
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+              className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
               value={formData.startTime}
               onChange={handleInputChange}
             />
           </div>
 
+           <div>
+            <label className="block text-xs font-bold text-blue-800 mb-1">
+               End Time (Shift End)
+            </label>
+            <input
+              type="time"
+              name="endTime"
+              required
+              className="w-full p-2.5 bg-white border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+              value={formData.endTime}
+              onChange={handleInputChange}
+            />
+          </div>
+        </div>
+
+        {/* Row 4: Lunch Break (Optional) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+           <div className="md:col-span-2">
+               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Lunch Break (Optional)</span>
+           </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+               Lunch Start
+            </label>
+            <input
+              type="time"
+              name="lunchStart"
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none font-mono"
+              value={formData.lunchStart}
+              onChange={handleInputChange}
+            />
+          </div>
+
+           <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+               Lunch End
+            </label>
+            <input
+              type="time"
+              name="lunchEnd"
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none font-mono"
+              value={formData.lunchEnd}
+              onChange={handleInputChange}
+            />
+          </div>
+        </div>
+
+        {/* Row 5: Type & Payment */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
               Slot Type
@@ -238,12 +294,13 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
               </select>
             </div>
           ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
-              Break slots are always FREE (payment mode forced to FREE).
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 flex items-center">
+              Break slots are always FREE.
             </div>
           )}
         </div>
 
+        {/* Row 6: Days */}
         <div>
           <label className="block text-xs font-bold text-gray-700 mb-2">
             Repeat On Days
@@ -275,7 +332,7 @@ export default function BulkSlotCreator({ doctors = [], onSuccess }) {
           disabled={loading || !formData.doctorId}
           className="w-full bg-[#003366] text-white py-3.5 rounded-xl font-bold shadow-lg hover:bg-[#002244] hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Processing..." : "✨ Generate Slots"}
+          {loading ? "Processing..." : "✨ Generate All Slots"}
         </button>
       </form>
     </div>

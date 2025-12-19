@@ -83,7 +83,7 @@ export default function Navbar() {
                 <Link 
                   to="/login" 
                   state={{ from: location.pathname }} 
-                  className="px-3 py-2 text-sm font-bold text-gray-600 hover:text-[#003366] transition-colors"
+                  className="px-3 py-2 -sm font-bold text-gray-600 hover:text-[#003366] transition-colors"
                 >
                   Login
                 </Link>
