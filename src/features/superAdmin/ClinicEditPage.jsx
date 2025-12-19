@@ -1,181 +1,223 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import api from '../../lib/api';
 import SuperAdminLayout from '../../layouts/SuperAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
-import { toast } from 'react-hot-toast'; 
+import api from '../../lib/api';
+import toast from 'react-hot-toast';
 import { ENDPOINTS } from '../../lib/endpoints';
 
 const INITIAL_FORM = {
+  email: '',
   name: '',
-  address: '',
-  city: '',
-  pincode: '',
-  accountNumber: '',
-  ifscCode: '',
-  bankName: '',
-  timings: '',
-  details: '',
+  phone: '',
+  clinicId: '',
+  password: '',
 };
 
-export default function ClinicEditPage() {
+export default function EditClinicAdminPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [form, setForm] = useState(INITIAL_FORM);
+  const [clinics, setClinics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const fetchClinic = async () => {
-    try {
-      setLoading(true);
-      // FIX: Use the correct endpoint function: CLINIC_BY_ID(id)
-      const res = await api.get(ENDPOINTS.SUPER_ADMIN.CLINIC_BY_ID(id)); 
-      const clinic = res.data;
-
-      if (!clinic) {
-        toast.error('Clinic not found');
-        navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
-        return;
-      }
-
-      setForm({
-        name: clinic.name || '',
-        address: clinic.address || '',
-        city: clinic.city || '',
-        pincode: clinic.pincode || '',
-        accountNumber: clinic.accountNumber || '',
-        ifscCode: clinic.ifscCode || '',
-        bankName: clinic.bankName || '',
-        // Ensure timings is converted back to a string for the input field
-        timings:
-          typeof clinic.timings === 'object'
-            ? JSON.stringify(clinic.timings)
-            : clinic.timings || '',
-        details: clinic.details || '',
-      });
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load clinic');
-      navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchClinic();
-  }, [id]);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [adminRes, clinicsRes] = await Promise.all([
+          api.get(ENDPOINTS.SUPER_ADMIN.ADMIN_BY_ID(id)),
+          api.get(ENDPOINTS.SUPER_ADMIN.CLINICS),
+        ]);
 
-  const handleChange = (e) =>
+        const admin = adminRes.data;
+
+        // ✅ FIX: Safely extract the clinics array
+        // Handles both [ {id:1}, {id:2} ] AND { clinics: [ {id:1} ] }
+        const clinicsData = clinicsRes.data;
+        const clinicsArray = Array.isArray(clinicsData) 
+          ? clinicsData 
+          : (clinicsData.clinics || clinicsData.data || []); 
+
+        setForm({
+          email: admin.email || '',
+          name: admin.name || '',
+          phone: admin.phone || '',
+          clinicId: admin.clinicId || '',
+          password: '', // Password intentionally blank on load
+        });
+        
+        setClinics(clinicsArray);
+
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.error || 'Failed to load data');
+        navigate('/super-admin/admins'); // Redirect if not found
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [id, navigate]);
+
+  const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
 
-    if (!form.name || !form.address || !form.city || !form.pincode) {
-      toast.error('Name, address, city, and pincode are required');
+    if (!form.email || !form.name || !form.clinicId) {
+      toast.error('Email, Name, and Clinic are required');
+      setSaving(false);
+      return;
+    }
+    if (form.password && form.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
       setSaving(false);
       return;
     }
 
     try {
-      // FIX: Use the correct endpoint function for PATCH as well
-      await api.patch(ENDPOINTS.SUPER_ADMIN.CLINIC_BY_ID(id), form);
-      toast.success('Clinic updated successfully!');
-      navigate(ENDPOINTS.SUPER_ADMIN.CLINICS);
+      // Create payload without password if it's empty (to avoid overwriting)
+      const payload = { ...form };
+      if (!payload.password) delete payload.password;
+
+      await api.patch(ENDPOINTS.SUPER_ADMIN.ADMIN_BY_ID(id), payload);
+
+      toast.success('Admin updated successfully!');
+      navigate('/super-admin/admins');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to update clinic');
+      toast.error(err.response?.data?.error || 'Failed to update admin');
       setSaving(false);
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this clinic admin?'))
+      return;
 
-  if (loading) return (
-    <SuperAdminLayout>
-      <Loader />
-    </SuperAdminLayout>
-  );
+    try {
+      await api.delete(ENDPOINTS.SUPER_ADMIN.ADMIN_BY_ID(id));
+      toast.success('Admin deleted successfully');
+      navigate('/super-admin/admins');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete admin');
+    }
+  };
+
+  if (loading)
+    return (
+      <SuperAdminLayout>
+        <div className="w-full flex justify-center py-20">
+          <Loader />
+        </div>
+      </SuperAdminLayout>
+    );
 
   return (
     <SuperAdminLayout>
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800">
-          Edit Clinic
+      <div className="overflow-x-hidden w-full max-w-4xl mx-auto">
+        <h1
+          className="text-3xl font-bold mb-6"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          Edit Clinic Admin
         </h1>
 
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white p-8 rounded-xl shadow-lg border border-gray-100"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Basic Info */}
-            <div className="md:col-span-2 border-b pb-2 mb-2">
-              <h3 className="text-lg font-semibold text-gray-700">Basic Information</h3>
-            </div>
-
             <div>
-              <label className="block mb-1 font-medium text-gray-700">Clinic Name*</label>
-              <input name="name" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.name} onChange={handleChange} required />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">City*</label>
-              <input name="city" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.city} onChange={handleChange} required />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">Address*</label>
-              <input name="address" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.address} onChange={handleChange} required />
+              <label className="block mb-1 font-medium text-gray-700">
+                Email Address *
+              </label>
+              <input
+                name="email"
+                type="email"
+                className="input w-full border p-2 rounded"
+                value={form.email}
+                onChange={handleChange}
+                required
+              />
             </div>
             <div>
-              <label className="block mb-1 font-medium text-gray-700">Pincode*</label>
-              <input name="pincode" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.pincode} onChange={handleChange} required />
-            </div>
-
-            {/* Bank Details */}
-            <div className="md:col-span-2 border-b pb-2 mb-2 mt-4">
-              <h3 className="text-lg font-semibold text-gray-700">Bank Details (Optional)</h3>
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">Account Number</label>
-              <input name="accountNumber" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.accountNumber} onChange={handleChange} />
+              <label className="block mb-1 font-medium text-gray-700">
+                Full Name *
+              </label>
+              <input
+                name="name"
+                className="input w-full border p-2 rounded"
+                value={form.name}
+                onChange={handleChange}
+                required
+              />
             </div>
             <div>
-              <label className="block mb-1 font-medium text-gray-700">IFSC Code</label>
-              <input name="ifscCode" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.ifscCode} onChange={handleChange} />
+              <label className="block mb-1 font-medium text-gray-700">
+                Phone Number
+              </label>
+              <input
+                name="phone"
+                className="input w-full border p-2 rounded"
+                value={form.phone}
+                onChange={handleChange}
+              />
             </div>
             <div>
-              <label className="block mb-1 font-medium text-gray-700">Bank Name</label>
-              <input name="bankName" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.bankName} onChange={handleChange} />
-            </div>
-
-            {/* Extra Info */}
-            <div className="md:col-span-2 border-b pb-2 mb-2 mt-4">
-              <h3 className="text-lg font-semibold text-gray-700">Additional Info</h3>
-            </div>
-
-            <div>
-              <label className="block mb-1 font-medium text-gray-700">Timings</label>
-              <input name="timings" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" value={form.timings} onChange={handleChange} placeholder="Mon–Fri 9AM–6PM" />
+              <label className="block mb-1 font-medium text-gray-700">
+                Assigned Clinic *
+              </label>
+              <select
+                name="clinicId"
+                className="input w-full border p-2 rounded bg-gray-50"
+                value={form.clinicId}
+                onChange={handleChange}
+                required
+              >
+                <option value="">-- Select Clinic --</option>
+                {/* ✅ FIX: Added optional chaining and Array.isArray check */}
+                {Array.isArray(clinics) && clinics.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.city})
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="md:col-span-2">
-              <label className="block mb-1 font-medium text-gray-700">Details</label>
-              <textarea name="details" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" rows={3} value={form.details} onChange={handleChange} placeholder="Brief description" />
+              <label className="block mb-1 font-medium text-gray-700">
+                Change Password (Optional)
+              </label>
+              <input
+                name="password"
+                type="password"
+                className="input w-full border p-2 rounded"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Leave blank to keep current password"
+              />
             </div>
           </div>
 
-          <div className="mt-8 flex gap-4">
-            <button 
-              type="button" 
-              onClick={() => navigate('/super-admin/clinics')}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+          <div className="mt-8 flex items-center justify-between border-t pt-6">
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-red-600 hover:text-red-800 font-medium px-4 py-2 hover:bg-red-50 rounded transition-colors"
             >
-              Cancel
+              Delete Admin Account
             </button>
-            <button 
-              type="submit" 
-              disabled={saving} 
-              className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md transition-all disabled:opacity-50"
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-[#0b3b5e] text-white py-3 px-8 rounded-lg font-bold hover:bg-[#092c46] transition-all disabled:opacity-70 shadow-md"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? 'Saving...' : 'Save Updates'}
             </button>
           </div>
         </form>

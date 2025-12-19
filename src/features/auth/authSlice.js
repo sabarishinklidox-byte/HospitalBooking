@@ -1,13 +1,14 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../lib/api';
+import { ENDPOINTS } from '../../lib/endpoints'; // ✅ Import endpoints
 
-// ✅ 1. READ FROM STORAGE IMMEDIATELY (Prevents refresh redirect issues)
+// ✅ 1. READ FROM STORAGE IMMEDIATELY
 const storedToken = localStorage.getItem('token') || localStorage.getItem('authToken');
-const storedUser = localStorage.getItem('user') 
-  ? JSON.parse(localStorage.getItem('user')) 
+const storedUser = localStorage.getItem('user')
+  ? JSON.parse(localStorage.getItem('user'))
   : null;
-const storedClinic = localStorage.getItem('clinic') 
-  ? JSON.parse(localStorage.getItem('clinic')) 
+const storedClinic = localStorage.getItem('clinic')
+  ? JSON.parse(localStorage.getItem('clinic'))
   : null;
 
 // SUPER ADMIN LOGIN
@@ -15,7 +16,8 @@ export const loginSuperAdmin = createAsyncThunk(
   'auth/loginSuperAdmin',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      const res = await api.post('/super-admin/login', { email, password });
+      // ✅ Use ENDPOINTS.SUPER_ADMIN.LOGIN
+      const res = await api.post(ENDPOINTS.SUPER_ADMIN.LOGIN, { email, password });
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
@@ -28,7 +30,9 @@ export const loginClinicAdmin = createAsyncThunk(
   'auth/loginClinicAdmin',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      const res = await api.post('/clinic/admin/login', { email, password });
+      // ✅ Use ENDPOINTS.ADMIN.LOGIN (Assuming standard admin login)
+      // Check your endpoints file to match exactly. Often it's ENDPOINTS.ADMIN.LOGIN
+      const res = await api.post(ENDPOINTS.ADMIN.LOGIN, { email, password });
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
@@ -41,7 +45,8 @@ export const loginDoctor = createAsyncThunk(
   'auth/loginDoctor',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      const res = await api.post('/doctor/login', { email, password });
+      // ✅ Use ENDPOINTS.DOCTOR.LOGIN
+      const res = await api.post(ENDPOINTS.DOCTOR.LOGIN, { email, password });
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
@@ -54,7 +59,8 @@ export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      const res = await api.post('/user/login', { email, password });
+      // ✅ Use ENDPOINTS.USER.LOGIN
+      const res = await api.post(ENDPOINTS.USER.LOGIN, { email, password });
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || { error: 'Login failed' });
@@ -65,9 +71,9 @@ export const loginUser = createAsyncThunk(
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: storedUser, // ✅ Initialize with data from localStorage
-    token: storedToken, // ✅ Initialize with data from localStorage
-    clinic: storedClinic, // ✅ NEW: Store clinic data for clinic admin
+    user: storedUser,
+    token: storedToken,
+    clinic: storedClinic,
     loading: false,
     error: null,
   },
@@ -91,26 +97,23 @@ const authSlice = createSlice({
       localStorage.setItem('user', JSON.stringify(action.payload));
     },
     setClinic(state, action) {
-      // ✅ NEW: Action to set clinic data
       state.clinic = action.payload;
       localStorage.setItem('clinic', JSON.stringify(action.payload));
     },
   },
   extraReducers: (builder) => {
-    // Helper to handle successful login for ANY role
     const handleLoginSuccess = (state, action) => {
       state.loading = false;
       state.token = action.payload.token;
       state.user = action.payload.user;
-      
-      // ✅ NEW: If clinic data exists (clinic admin), store it
+
       if (action.payload.clinic) {
         state.clinic = action.payload.clinic;
         localStorage.setItem('clinic', JSON.stringify(action.payload.clinic));
       }
-      
+
       localStorage.setItem('token', action.payload.token);
-      localStorage.setItem('authToken', action.payload.token); // ✅ Support both keys
+      localStorage.setItem('authToken', action.payload.token);
       localStorage.setItem('user', JSON.stringify(action.payload.user));
     };
 
@@ -126,7 +129,7 @@ const authSlice = createSlice({
         state.error = action.payload?.error || 'Login failed';
       })
 
-      // ✅ NEW: CLINIC ADMIN
+      // CLINIC ADMIN
       .addCase(loginClinicAdmin.pending, (state) => {
         state.loading = true;
         state.error = null;

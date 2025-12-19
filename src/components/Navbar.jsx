@@ -1,12 +1,14 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice";
+import { FiPlusSquare } from "react-icons/fi"; // Removed FiArrowLeft
 
 export default function Navbar() {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation(); // Still needed for Login 'state'
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -16,46 +18,38 @@ export default function Navbar() {
   };
 
   const isClinicAdmin = user?.role === "ADMIN";
-
   const safeName = user?.name || "User";
   const safeEmail = user?.email || "";
-  const safeRoleLabel = (user?.role ?? "USER").toLowerCase(); // ✅ prevents crash
+  const safeRoleLabel = (user?.role ?? "USER").toLowerCase(); 
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all">
+    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20">
-          {/* LEFT: LOGO */}
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0055aa] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-              D
+          
+          {/* LEFT: LOGO ONLY (Back button removed) */}
+          <div className="flex items-center gap-4">
+            <div 
+              className="flex items-center gap-2 cursor-pointer" 
+              
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0055aa] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md">
+                D
+              </div>
+              <span className="text-2xl font-bold text-[#003366] tracking-tight hidden sm:block">
+                DocBook
+              </span>
             </div>
-            <span className="text-2xl font-bold text-[#003366] tracking-tight">
-              DocBook
-            </span>
           </div>
 
           {/* CENTER: DESKTOP NAVIGATION */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-6">
             {user ? (
               <>
                 <Link
                   to="/my-appointments"
                   className="text-sm font-semibold text-gray-600 hover:text-[#003366] flex items-center gap-2 transition-colors"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    ></path>
-                  </svg>
                   Appointments
                 </Link>
 
@@ -63,19 +57,6 @@ export default function Navbar() {
                   to="/profile"
                   className="text-sm font-semibold text-gray-600 hover:text-[#003366] flex items-center gap-2 transition-colors"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    ></path>
-                  </svg>
                   Profile
                 </Link>
 
@@ -84,30 +65,27 @@ export default function Navbar() {
                     to="/admin/dashboard"
                     className="text-sm font-semibold text-[#003366] flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z"
-                      />
-                    </svg>
                     Clinic Admin
                   </Link>
                 )}
               </>
             ) : (
-              <Link
-                to="/"
-                className="text-sm font-semibold text-gray-600 hover:text-[#003366]"
-              >
-                Find Doctors
-              </Link>
+              <>
+                 {/* Register Clinic Link (Only for Guests) */}
+                 <Link
+                  to="/register"
+                  className="text-sm font-semibold text-slate-500 hover:text-[#003366] flex items-center gap-2 transition-colors"
+                >
+                  <FiPlusSquare /> Register Clinic
+                </Link>
+                <div className="h-6 w-px bg-gray-300 mx-2"></div>
+                <Link
+                  to="/"
+                  className="text-sm font-semibold text-gray-600 hover:text-[#003366]"
+                >
+                  Find Doctors
+                </Link>
+              </>
             )}
           </div>
 
@@ -129,18 +107,8 @@ export default function Navbar() {
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                   title="Logout"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    ></path>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                   </svg>
                 </button>
               </div>
@@ -148,7 +116,7 @@ export default function Navbar() {
               <div className="flex items-center gap-3">
                 <Link
                   to="/login"
-                   state={{ from: location.pathname }}
+                  state={{ from: location.pathname }}
                   className="px-5 py-2.5 text-sm font-bold text-gray-700 hover:text-[#003366] hover:bg-gray-50 rounded-lg transition-all"
                 >
                   Login
@@ -160,36 +128,28 @@ export default function Navbar() {
                 >
                   Sign Up
                 </Link>
-              </div>
+              </div>   
             )}
           </div>
 
           {/* MOBILE MENU TOGGLE */}
-          <div className="flex items-center md:hidden">
+          <div className="flex items-center md:hidden gap-3">
+             {/* Mobile Register Clinic Button (Icon only to save space) */}
+             {!user && (
+                 <Link to="/register" className="text-[#003366] p-2 bg-blue-50 rounded-lg">
+                    <FiPlusSquare size={20} />
+                 </Link>
+             )}
+
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 focus:outline-none"
             >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 {isMobileMenuOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 )}
               </svg>
             </button>
@@ -199,7 +159,7 @@ export default function Navbar() {
 
       {/* MOBILE DROPDOWN MENU */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100 shadow-xl absolute w-full">
+        <div className="md:hidden bg-white border-t border-gray-100 shadow-xl absolute w-full animate-fadeIn">
           <div className="px-4 pt-3 pb-6 space-y-2">
             {user ? (
               <>
@@ -251,6 +211,16 @@ export default function Navbar() {
               </>
             ) : (
               <div className="space-y-3 mt-2">
+                <Link
+                    to="/register"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 w-full justify-center px-4 py-3 rounded-lg font-bold text-[#003366] border border-[#003366] hover:bg-blue-50"
+                >
+                    <FiPlusSquare /> Register Clinic
+                </Link>
+
+                <div className="border-t border-slate-100 my-2"></div>
+
                 <Link
                   to="/login"
                   onClick={() => setIsMobileMenuOpen(false)}

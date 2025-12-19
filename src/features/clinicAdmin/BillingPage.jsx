@@ -144,6 +144,16 @@ export default function BillingPage() {
                         : 'Monthly plan'}
                       {plan.isTrial && ' · Trial'}
                     </li>
+
+                    {/* NEW: Reviews & Embeds */}
+                    {plan.enableGoogleReviews && (
+                      <li className="text-green-700 font-medium">• Google Ratings & Reviews</li>
+                    )}
+                    {plan.allowEmbedReviews && (
+                      <li className="text-teal-700 font-medium">• Website Embed Widget</li>
+                    )}
+
+                    {/* Other features */}
                     {plan.allowOnlinePayments && (
                       <li>• Online payments</li>
                     )}

@@ -33,6 +33,14 @@ export default function EditClinicAdminPage() {
         ]);
 
         const admin = adminRes.data;
+
+        // ✅ FIX: Safely extract the clinics array
+        // This handles cases where the API returns { clinics: [...] } or { data: [...] }
+        const clinicsData = clinicsRes.data;
+        const clinicsArray = Array.isArray(clinicsData)
+          ? clinicsData
+          : (clinicsData.clinics || clinicsData.data || []);
+
         setForm({
           email: admin.email || '',
           name: admin.name || '',
@@ -40,7 +48,9 @@ export default function EditClinicAdminPage() {
           clinicId: admin.clinicId || '',
           password: '', // Password intentionally blank on load
         });
-        setClinics(clinicsRes.data);
+        
+        setClinics(clinicsArray);
+
       } catch (err) {
         console.error(err);
         toast.error(err.response?.data?.error || 'Failed to load data');
@@ -52,7 +62,6 @@ export default function EditClinicAdminPage() {
     loadData();
   }, [id, navigate]);
 
-  // ✅ MISSING HANDLER ADDED HERE
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -172,7 +181,8 @@ export default function EditClinicAdminPage() {
                 required
               >
                 <option value="">-- Select Clinic --</option>
-                {clinics.map((c) => (
+                {/* ✅ FIX: Added safety check (Array.isArray) before mapping */}
+                {Array.isArray(clinics) && clinics.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.city})
                   </option>

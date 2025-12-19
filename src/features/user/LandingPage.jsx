@@ -12,8 +12,7 @@ const DEFAULT_BANNER =
   "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=1200";
 const DEFAULT_LOGO =
   "https://cdn-icons-png.flaticon.com/128/4521/4521401.png";
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const formatClinicTimings = (timings) => {
   if (!timings) return "Timings not available";
@@ -58,11 +57,19 @@ export default function LandingPage() {
       const res = await api.get(ENDPOINTS.PUBLIC.CLINICS, {
         params: { q: q || undefined },
       });
-      setClinics(res.data);
+
+      // Safely extract array even if backend returns object { data: [...] }
+      const list = Array.isArray(res.data)
+        ? res.data
+        : res.data?.data || res.data?.clinics || [];
+
+      setClinics(list);
     } catch (err) {
+      console.error("Clinic fetch error:", err);
       setError(
         "Failed to load clinics. Please check your network connection."
       );
+      setClinics([]); // prevent map error
     } finally {
       setLoading(false);
     }
@@ -88,7 +95,13 @@ export default function LandingPage() {
         const res = await api.get(
           ENDPOINTS.PUBLIC.CLINIC_DOCTORS(selectedClinic.id)
         );
-        setDoctors(res.data);
+
+        // Safely extract array here too
+        const list = Array.isArray(res.data)
+          ? res.data
+          : res.data?.data || res.data?.doctors || [];
+
+        setDoctors(list);
 
         if (doctorsSectionRef.current) {
           doctorsSectionRef.current.scrollIntoView({
@@ -96,7 +109,8 @@ export default function LandingPage() {
             block: "start",
           });
         }
-      } catch {
+      } catch (err) {
+        console.error("Doctors fetch error:", err);
         setDoctors([]);
       } finally {
         setLoading(false);
@@ -552,7 +566,10 @@ export default function LandingPage() {
 
                 <motion.a
                   href={`/doctors/${doctor.id}/book`}
-                  whileHover={{ y: -2, boxShadow: "0 12px 24px rgba(0,0,0,0.18)" }}
+                  whileHover={{
+                    y: -2,
+                    boxShadow: "0 12px 24px rgba(0,0,0,0.18)",
+                  }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full py-3 bg-[#0056b3] text-white rounded-xl font-bold text-lg hover:bg-[#00408f] transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-center"
                   style={{
