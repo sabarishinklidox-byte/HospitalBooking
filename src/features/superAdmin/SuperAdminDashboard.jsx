@@ -10,9 +10,9 @@ import { ENDPOINTS } from "../../lib/endpoints";
 
 const INITIAL_CLINIC_FORM = {
   name: "",
-  phone: "", // ✅ NEW: Added phone field
-  logo: "",
-  banner: "",
+  phone: "", 
+  // logo: "",   <-- REMOVED
+  // banner: "", <-- REMOVED
   address: "",
   city: "",
   pincode: "",
@@ -23,8 +23,6 @@ const INITIAL_CLINIC_FORM = {
   details: "",
   isActive: true,
   allowAuditView: false,
-
-  // plan selection
   planId: "",
 };
 
@@ -39,8 +37,7 @@ export default function SuperAdminDashboard() {
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [clinicForm, setClinicForm] = useState(INITIAL_CLINIC_FORM);
   const [clinicSaving, setClinicSaving] = useState(false);
-  const [uploading, setUploading] = useState({ logo: false, banner: false });
-
+  
   // plans state
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
@@ -97,15 +94,12 @@ export default function SuperAdminDashboard() {
   const fetchPlans = async () => {
     try {
       setLoadingPlans(true);
-
-      // Your listPublicPlans returns array directly
       const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
       const list = res.data || [];
       const active = list.filter((p) => p.isActive !== false);
 
       setPlans(active);
 
-      // auto set default planId (only if empty)
       setClinicForm((prev) => ({
         ...prev,
         planId: prev.planId || active?.[0]?.id || "",
@@ -123,13 +117,11 @@ export default function SuperAdminDashboard() {
     fetchStats();
   }, []);
 
-  // If plan changes and audit is not allowed, force checkbox off
   useEffect(() => {
     if (selectedPlan && !auditAllowedByPlan && clinicForm.allowAuditView) {
       setClinicForm((prev) => ({ ...prev, allowAuditView: false }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clinicForm.planId]);
+  }, [clinicForm.planId, selectedPlan, auditAllowedByPlan]);
 
   const handleClinicChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -139,33 +131,8 @@ export default function SuperAdminDashboard() {
     }));
   };
 
-  const handleClinicFileUpload = async (e, field) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setUploading((prev) => ({ ...prev, [field]: true }));
-
-      const fd = new FormData();
-      fd.append("file", file);
-
-      const res = await api.post(ENDPOINTS.SUPER_ADMIN.CLINIC_UPLOAD, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setClinicForm((prev) => ({ ...prev, [field]: res.data.url }));
-      toast.success(`${field === "logo" ? "Logo" : "Banner"} uploaded`);
-    } catch (err) {
-      console.error("Upload error", err);
-      toast.error("Failed to upload image");
-    } finally {
-      setUploading((prev) => ({ ...prev, [field]: false }));
-    }
-  };
-
   const openClinicModal = async () => {
     setClinicModalOpen(true);
-    // load plans when opening modal (so dropdown is always fresh)
     if (plans.length === 0) await fetchPlans();
   };
 
@@ -173,7 +140,6 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     setClinicSaving(true);
 
-    // ✅ Added phone to validation
     if (!clinicForm.name || !clinicForm.phone || !clinicForm.city || !clinicForm.address || !clinicForm.pincode) {
       toast.error("Please fill all required fields (*)");
       setClinicSaving(false);
@@ -209,7 +175,7 @@ export default function SuperAdminDashboard() {
   if (loading) {
     return (
       <SuperAdminLayout>
-        <div className="py-20">
+        <div className="py-20 flex justify-center">
           <Loader />
         </div>
       </SuperAdminLayout>
@@ -238,9 +204,7 @@ export default function SuperAdminDashboard() {
             <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
             <div className="flex justify-between items-start relative z-10">
               <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  Total Clinics
-                </p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Clinics</p>
                 <h2 className="text-4xl font-black text-[#003366]">{stats.clinics}</h2>
               </div>
               <div className="p-3 bg-blue-50 text-blue-600 rounded-xl text-2xl">🏥</div>
@@ -251,9 +215,7 @@ export default function SuperAdminDashboard() {
             <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
             <div className="flex justify-between items-start relative z-10">
               <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  Clinic Admins
-                </p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Clinic Admins</p>
                 <h2 className="text-4xl font-black text-[#003366]">{stats.admins}</h2>
               </div>
               <div className="p-3 bg-purple-50 text-purple-600 rounded-xl text-2xl">👨‍💼</div>
@@ -261,43 +223,36 @@ export default function SuperAdminDashboard() {
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
-            <div className="flex justify-between items-start relative z-10">
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  Total Doctors
-                </p>
-                <h2 className="text-4xl font-black text-[#003366]">{stats.doctors}</h2>
-              </div>
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-2xl">🩺</div>
-            </div>
+             <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+             <div className="flex justify-between items-start relative z-10">
+               <div>
+                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Doctors</p>
+                 <h2 className="text-4xl font-black text-[#003366]">{stats.doctors}</h2>
+               </div>
+               <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-2xl">🩺</div>
+             </div>
           </div>
         </div>
 
-        {/* GLOBAL ANALYTICS */}
+        {/* ANALYTICS & ACTIONS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                Total Users
-              </p>
-              <h2 className="text-3xl font-black text-[#003366]">{analytics.totalUsers}</h2>
-            </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-2xl">👥</div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                Total Bookings
-              </p>
-              <h2 className="text-3xl font-black text-[#003366]">{analytics.totalBookings}</h2>
-            </div>
-            <div className="p-3 bg-orange-50 text-orange-600 rounded-xl text-2xl">📅</div>
-          </div>
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+             <div>
+               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Users</p>
+               <h2 className="text-3xl font-black text-[#003366]">{analytics.totalUsers}</h2>
+             </div>
+             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-2xl">👥</div>
+           </div>
+           
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+             <div>
+               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Bookings</p>
+               <h2 className="text-3xl font-black text-[#003366]">{analytics.totalBookings}</h2>
+             </div>
+             <div className="p-3 bg-orange-50 text-orange-600 rounded-xl text-2xl">📅</div>
+           </div>
         </div>
 
-        {/* ACTION BUTTONS */}
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
           <button
             onClick={openClinicModal}
@@ -316,6 +271,7 @@ export default function SuperAdminDashboard() {
         {/* CREATE CLINIC MODAL */}
         <Modal isOpen={clinicModalOpen} onClose={() => setClinicModalOpen(false)} title="Add New Clinic">
           <form onSubmit={handleCreateClinic} className="space-y-6">
+            
             {/* Basic Info */}
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
               <h4 className="text-sm font-bold text-[#003366] uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">
@@ -325,9 +281,7 @@ export default function SuperAdminDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Select Plan */}
                 <div className="col-span-2">
-                  <label className="text-sm font-semibold text-gray-700 block mb-1">
-                    Select Plan*
-                  </label>
+                  <label className="text-sm font-semibold text-gray-700 block mb-1">Select Plan*</label>
                   <select
                     name="planId"
                     className="input w-full"
@@ -345,13 +299,6 @@ export default function SuperAdminDashboard() {
                         </option>
                       ))}
                   </select>
-
-                  {selectedPlan && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Max Doctors: {selectedPlan.maxDoctors ?? "—"} · Max Bookings/Period:{" "}
-                      {selectedPlan.maxBookings ?? "—"}
-                    </p>
-                  )}
                 </div>
 
                 <div className="col-span-2">
@@ -366,7 +313,6 @@ export default function SuperAdminDashboard() {
                   />
                 </div>
                 
-                {/* ✅ Added Phone Number Field */}
                 <div className="col-span-2">
                   <label className="text-sm font-semibold text-gray-700 block mb-1">Phone Number*</label>
                   <input
@@ -380,25 +326,7 @@ export default function SuperAdminDashboard() {
                   />
                 </div>
 
-                {/* Logo */}
-                <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1">Logo</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleClinicFileUpload(e, "logo")} />
-                  {uploading.logo && <p className="mt-1 text-xs text-gray-400">Uploading logo...</p>}
-                  {clinicForm.logo && (
-                    <img src={clinicForm.logo} alt="Logo preview" className="h-10 mt-2 rounded border object-contain" />
-                  )}
-                </div>
-
-                {/* Banner */}
-                <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1">Banner</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleClinicFileUpload(e, "banner")} />
-                  {uploading.banner && <p className="mt-1 text-xs text-gray-400">Uploading banner...</p>}
-                  {clinicForm.banner && (
-                    <img src={clinicForm.banner} alt="Banner preview" className="h-16 mt-2 rounded border object-cover" />
-                  )}
-                </div>
+                {/* --- LOGO & BANNER REMOVED --- */}
 
                 <div className="col-span-2">
                   <label className="text-sm font-semibold text-gray-700 block mb-1">Address*</label>
@@ -454,7 +382,6 @@ export default function SuperAdminDashboard() {
               <h4 className="text-sm font-bold text-[#003366] uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">
                 Bank Information
               </h4>
-
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-semibold text-gray-700 block mb-1">Bank Name</label>
@@ -494,7 +421,6 @@ export default function SuperAdminDashboard() {
               <h4 className="text-sm font-bold text-[#003366] uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">
                 Settings & Description
               </h4>
-
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-semibold text-gray-700 block mb-1">About Clinic</label>
@@ -507,7 +433,6 @@ export default function SuperAdminDashboard() {
                     placeholder="Brief description..."
                   />
                 </div>
-
                 <div className="flex flex-wrap gap-6 pt-2">
                   <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
                     <input
@@ -519,7 +444,6 @@ export default function SuperAdminDashboard() {
                     />
                     <span className="text-sm font-medium text-gray-700">Active Status</span>
                   </label>
-
                   <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
                     <input
                       type="checkbox"
@@ -532,12 +456,6 @@ export default function SuperAdminDashboard() {
                     <span className="text-sm font-medium text-gray-700">Allow Admin to View Logs</span>
                   </label>
                 </div>
-
-                {!auditAllowedByPlan && selectedPlan && (
-                  <div className="text-xs text-gray-500">
-                    Audit logs are disabled for this selected plan.
-                  </div>
-                )}
               </div>
             </div>
 
