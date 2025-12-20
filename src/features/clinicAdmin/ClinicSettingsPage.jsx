@@ -24,7 +24,7 @@ export default function ClinicSettingsPage() {
     password: '',
   });
 
-  // Clinic form (branding + Google reviews config, NOT rating)
+  // Clinic form
   const [clinicForm, setClinicForm] = useState({
     address: '',
     city: '',
@@ -38,8 +38,9 @@ export default function ClinicSettingsPage() {
     googleReviewsEmbedCode: '',
   });
 
-  // Gateway State (Stripe)
-  const [stripeConfig, setStripeConfig] = useState({
+  // Gateway State (Stripe + Razorpay)
+  const [selectedGateway, setSelectedGateway] = useState('STRIPE'); // 'STRIPE' | 'RAZORPAY'
+  const [gatewayConfig, setGatewayConfig] = useState({
     publishableKey: '',
     secretKey: '',
     isActive: false,
@@ -47,11 +48,47 @@ export default function ClinicSettingsPage() {
   const [isGatewayConfigured, setIsGatewayConfigured] = useState(false);
   const [gatewayLoading, setGatewayLoading] = useState(false);
 
+  const fetchGatewayConfig = async (gatewayName) => {
+    try {
+      setGatewayLoading(true);
+      // Backend accepts ?gateway=STRIPE|RAZORPAY and returns { apiKey, isActive }
+      const gwRes = await api.get(ENDPOINTS.ADMIN.GATEWAY_STRIPE, {
+        params: { gateway: gatewayName },
+      });
+
+      if (gwRes.data?.apiKey) {
+        setGatewayConfig({
+          publishableKey: gwRes.data.apiKey,
+          secretKey: '',
+          isActive: gwRes.data.isActive ?? false,
+        });
+        setIsGatewayConfigured(true);
+      } else {
+        setGatewayConfig({
+          publishableKey: '',
+          secretKey: '',
+          isActive: false,
+        });
+        setIsGatewayConfigured(false);
+      }
+    } catch (e) {
+      console.warn('Gateway config not found (first time setup)', e);
+      setGatewayConfig({
+        publishableKey: '',
+        secretKey: '',
+        isActive: false,
+      });
+      setIsGatewayConfigured(false);
+    } finally {
+      setGatewayLoading(false);
+    }
+  };
+
   const fetchSettings = async () => {
     try {
       setLoading(true);
 
-      // 1. Profile & clinic (and plan)
+      // 1. Profile & clinic
       const res = await api.get(ENDPOINTS.ADMIN.PROFILE);
       const { admin, clinic } = res.data;
 
@@ -80,19 +117,16 @@ export default function ClinicSettingsPage() {
         }));
       }
 
-      // 2. Stripe config
+      // 2. Initial gateway (use active from backend; fallback Stripe)
       try {
-        const gwRes = await api.get(ENDPOINTS.ADMIN.GATEWAY_STRIPE);
-        if (gwRes.data.apiKey) {
-          setStripeConfig((prev) => ({
-            ...prev,
-            publishableKey: gwRes.data.apiKey,
-            isActive: gwRes.data.isActive,
-          }));
-          setIsGatewayConfigured(true);
-        }
-      } catch (e) {
-        console.warn('Gateway config not found (first time setup)');
+        const activeRes = await api.get(ENDPOINTS.ADMIN.ACTIVE_GATEWAY);
+        const initial = activeRes.data?.activeGateway || 'STRIPE';
+        setSelectedGateway(initial);
+        await fetchGatewayConfig(initial);
+      } catch (err) {
+        console.warn('Failed to load active gateway, defaulting to STRIPE', err);
+        setSelectedGateway('STRIPE');
+        await fetchGatewayConfig('STRIPE');
       }
     } catch (err) {
       console.error(err);
@@ -146,7 +180,6 @@ export default function ClinicSettingsPage() {
     formData.append('timings', clinicForm.timings || '');
     formData.append('details', clinicForm.details || '');
 
-    // Google config fields as simple text
     formData.append('googlePlaceId', clinicForm.googlePlaceId || '');
     formData.append('googleMapsUrl', clinicForm.googleMapsUrl || '');
     formData.append(
@@ -176,13 +209,16 @@ export default function ClinicSettingsPage() {
     setGatewayLoading(true);
     try {
       await api.post(ENDPOINTS.ADMIN.GATEWAY_STRIPE, {
-        publishableKey: stripeConfig.publishableKey,
-        secretKey: stripeConfig.secretKey,
-        isActive: stripeConfig.isActive,
+        gatewayName: selectedGateway, // STRIPE or RAZORPAY
+        publishableKey: gatewayConfig.publishableKey,
+        secretKey: gatewayConfig.secretKey,
+        isActive: gatewayConfig.isActive,
       });
-      toast.success('Payment Gateway Updated Successfully!');
+      toast.success(
+        `${selectedGateway === 'STRIPE' ? 'Stripe' : 'Razorpay'} settings updated successfully!`
+      );
       setIsGatewayConfigured(true);
-      setStripeConfig((prev) => ({ ...prev, secretKey: '' }));
+      setGatewayConfig((prev) => ({ ...prev, secretKey: '' }));
     } catch (err) {
       toast.error(
         err.response?.data?.error || 'Failed to update gateway settings'
@@ -208,43 +244,41 @@ export default function ClinicSettingsPage() {
     }
   };
 
-  // Use clinic name + full address to auto-fetch Place ID & rating URL
-const handleAutoFillGooglePlace = async () => {
-  const query = clinicForm.googlePlaceId.trim(); // user text
+  const handleAutoFillGooglePlace = async () => {
+    const query = clinicForm.googlePlaceId.trim();
 
-  // Require at least 3 words (name + city/area)
-  const parts = query.split(/\s+/).filter(Boolean);
-  if (parts.length < 3) {
-    toast.error(
-      'Type clinic name + city + area/road, exactly as on Google Maps.'
-    );
-    return;
-  }
+    const parts = query.split(/\s+/).filter(Boolean);
+    if (parts.length < 3) {
+      toast.error(
+        'Type clinic name + city + area/road, exactly as on Google Maps.'
+      );
+      return;
+    }
 
-  try {
-    setPlaceSearchLoading(true);
-    const res = await api.get(ENDPOINTS.PUBLIC.GOOGLE_PLACE_ID,{ params: { query } });
-    const { placeId, address } = res.data;
+    try {
+      setPlaceSearchLoading(true);
+      const res = await api.get(ENDPOINTS.PUBLIC.GOOGLE_PLACE_ID, {
+        params: { query },
+      });
+      const { placeId, address } = res.data;
 
-    setClinicForm((prev) => ({
-      ...prev,
-      googlePlaceId: placeId,
-      googleMapsUrl: `https://search.google.com/local/writereview?placeid=${placeId}`,
-      address: prev.address || address || prev.address,
-    }));
+      setClinicForm((prev) => ({
+        ...prev,
+        googlePlaceId: placeId,
+        googleMapsUrl: `https://search.google.com/local/writereview?placeid=${placeId}`,
+        address: prev.address || address || prev.address,
+      }));
 
-    toast.success('Matched clinic on Google and auto-filled fields.');
-  } catch (err) {
-    toast.error(
-      err.response?.data?.error ||
-        'Clinic not found. Please copy the exact name + address from Google Maps.'
-    );
-  } finally {
-    setPlaceSearchLoading(false);
-  }
-};
-
-
+      toast.success('Matched clinic on Google and auto-filled fields.');
+    } catch (err) {
+      toast.error(
+        err.response?.data?.error ||
+          'Clinic not found. Please copy the exact name + address from Google Maps.'
+      );
+    } finally {
+      setPlaceSearchLoading(false);
+    }
+  };
 
   if (loading || planLoading) {
     return (
@@ -597,7 +631,7 @@ const handleAutoFillGooglePlace = async () => {
             </form>
           </section>
 
-          {/* Payment Gateway (Stripe) */}
+          {/* Payment Gateway (Stripe + Razorpay) */}
           <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
               <div className="flex items-center gap-3">
@@ -609,7 +643,7 @@ const handleAutoFillGooglePlace = async () => {
                     Payment Gateway
                   </h2>
                   <p className="text-xs text-gray-500">
-                    Configure Stripe to accept online payments.
+                    Configure online payments.
                   </p>
                 </div>
               </div>
@@ -626,28 +660,36 @@ const handleAutoFillGooglePlace = async () => {
 
             <form onSubmit={submitGateway} className="p-6 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Provider selector */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
                     Provider
                   </label>
                   <select
-                    className="input w-full bg-gray-50 text-gray-500 cursor-not-allowed"
-                    value="STRIPE"
-                    disabled
+                    className="input w-full"
+                    value={selectedGateway}
+                    onChange={(e) => {
+                      const newGateway = e.target.value;
+                      setSelectedGateway(newGateway);
+                      fetchGatewayConfig(newGateway);
+                    }}
+                    disabled={gatewayLoading}
                   >
                     <option value="STRIPE">Stripe Payments</option>
+                    <option value="RAZORPAY">Razorpay</option>
                   </select>
                 </div>
 
+                {/* Enable toggle */}
                 <div className="flex items-end pb-3">
                   <label className="flex items-center gap-3 cursor-pointer select-none">
                     <div className="relative">
                       <input
                         type="checkbox"
                         className="sr-only"
-                        checked={stripeConfig.isActive}
+                        checked={gatewayConfig.isActive}
                         onChange={(e) =>
-                          setStripeConfig((prev) => ({
+                          setGatewayConfig((prev) => ({
                             ...prev,
                             isActive: e.target.checked,
                           }))
@@ -655,49 +697,60 @@ const handleAutoFillGooglePlace = async () => {
                       />
                       <div
                         className={`block w-10 h-6 rounded-full transition-colors ${
-                          stripeConfig.isActive ? 'bg-blue-600' : 'bg-gray-300'
+                          gatewayConfig.isActive
+                            ? 'bg-blue-600'
+                            : 'bg-gray-300'
                         }`}
                       ></div>
                       <div
                         className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
-                          stripeConfig.isActive ? 'translate-x-4' : ''
+                          gatewayConfig.isActive ? 'translate-x-4' : ''
                         }`}
                       ></div>
                     </div>
                     <span className="text-sm font-bold text-gray-700">
-                      Enable Online Payments
+                      Enable {selectedGateway === 'STRIPE' ? 'Stripe' : 'Razorpay'}
                     </span>
                   </label>
                 </div>
 
+                {/* Publishable/Key ID */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    Publishable Key (pk_test_...)
+                    {selectedGateway === 'STRIPE'
+                      ? 'Publishable Key (pk_test_...)'
+                      : 'Key ID (rzp_test_...)'}
                   </label>
                   <input
                     type="text"
                     className="input w-full font-mono text-sm"
-                    value={stripeConfig.publishableKey}
+                    value={gatewayConfig.publishableKey}
                     onChange={(e) =>
-                      setStripeConfig((prev) => ({
+                      setGatewayConfig((prev) => ({
                         ...prev,
                         publishableKey: e.target.value,
                       }))
                     }
-                    placeholder="pk_test_..."
+                    placeholder={
+                      selectedGateway === 'STRIPE' ? 'pk_test_...' : 'rzp_test_...'
+                    }
                     required
                   />
                 </div>
+
+                {/* Secret key */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    Secret Key (sk_test_...)
+                    {selectedGateway === 'STRIPE'
+                      ? 'Secret Key (sk_test_...)'
+                      : 'Key Secret'}
                   </label>
                   <input
                     type="password"
                     className="input w-full font-mono text-sm"
-                    value={stripeConfig.secretKey}
+                    value={gatewayConfig.secretKey}
                     onChange={(e) =>
-                      setStripeConfig((prev) => ({
+                      setGatewayConfig((prev) => ({
                         ...prev,
                         secretKey: e.target.value,
                       }))
@@ -705,7 +758,9 @@ const handleAutoFillGooglePlace = async () => {
                     placeholder={
                       isGatewayConfigured
                         ? '••••••••••••••••••••'
-                        : 'sk_test_...'
+                        : selectedGateway === 'STRIPE'
+                        ? 'sk_test_...'
+                        : 'enter secret...'
                     }
                     required={!isGatewayConfigured}
                   />
@@ -718,7 +773,9 @@ const handleAutoFillGooglePlace = async () => {
                   disabled={gatewayLoading}
                   className="py-2.5 px-6 font-bold bg-[#0b3b5e] hover:bg-[#092c46] text-white rounded-lg transition-colors disabled:opacity-70"
                 >
-                  {gatewayLoading ? 'Updating...' : 'Update Gateway'}
+                  {gatewayLoading
+                    ? 'Updating...'
+                    : `Update ${selectedGateway === 'STRIPE' ? 'Stripe' : 'Razorpay'}`}
                 </button>
               </div>
             </form>

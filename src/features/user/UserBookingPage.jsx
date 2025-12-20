@@ -18,13 +18,12 @@ const toFullUrl = (url) => {
   return `${API_BASE_URL}${url}`;
 };
 
-const formatPrice = (price) => {
-  return new Intl.NumberFormat('en-IN', {
+const formatPrice = (price) =>
+  new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 0,
   }).format(price);
-};
 
 const getPeriodFromTime = (timeStr) => {
   if (!timeStr) return 'Morning';
@@ -48,26 +47,22 @@ const to12Hour = (timeStr) => {
 
 // ✅ HELPER: Check if a slot time has passed
 const isSlotPassed = (slotDateStr, slotTimeStr) => {
-    if (!slotDateStr || !slotTimeStr) return false;
-    
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    
-    // 1. If date is in the past, it's passed
-    if (slotDateStr < todayStr) return true;
-    
-    // 2. If date is in future, it's NOT passed
-    if (slotDateStr > todayStr) return false;
+  if (!slotDateStr || !slotTimeStr) return false;
 
-    // 3. If date is TODAY, check time
-    const [hours, minutes] = slotTimeStr.split(':').map(Number);
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
 
-    if (hours < currentHours) return true;
-    if (hours === currentHours && minutes <= currentMinutes) return true;
-    
-    return false;
+  if (slotDateStr < todayStr) return true;
+  if (slotDateStr > todayStr) return false;
+
+  const [hours, minutes] = slotTimeStr.split(':').map(Number);
+  const currentHours = now.getHours();
+  const currentMinutes = now.getMinutes();
+
+  if (hours < currentHours) return true;
+  if (hours === currentHours && minutes <= currentMinutes) return true;
+
+  return false;
 };
 
 export default function UserBookingPage() {
@@ -134,7 +129,10 @@ export default function UserBookingPage() {
 
         setSlots(withPeriod);
 
-        if (selectedSlot && withPeriod.some((s) => s.id === selectedSlot.id && s.isBooked)) {
+        if (
+          selectedSlot &&
+          withPeriod.some((s) => s.id === selectedSlot.id && s.isBooked)
+        ) {
           setSelectedSlot(null);
         }
       } catch (err) {
@@ -174,29 +172,102 @@ export default function UserBookingPage() {
         return;
       }
 
+      // ONLINE booking → go through createBooking (backend decides Stripe/Razorpay)
       if (selectedSlot.paymentMode === 'ONLINE') {
-        const res = await api.post(ENDPOINTS.PAYMENT.CREATE_CHECKOUT_SESSION, {
+        const res = await api.post(ENDPOINTS.PAYMENT.CREATE_BOOKING, {
           slotId: selectedSlot.id,
-          doctorId: doctor.id,
           userId: user.id,
+          paymentMethod: 'ONLINE',
+          // optional: provider hint, or let backend choose by active gateway
+          // provider: 'RAZORPAY' | 'STRIPE'
         });
 
-        if (res.data.url) {
-          window.location.href = res.data.url;
-        } else {
-          toast.error('Failed to initiate payment');
+        const data = res.data;
+
+        if (!data.success || !data.isOnline) {
+          toast.error(data.error || 'Failed to start online payment');
+          return;
         }
-      } else {
-        await api.post(ENDPOINTS.USER.APPOINTMENTS, {
-          slotId: selectedSlot.id,
-          doctorId: doctor.id,
-          clinicId: finalClinicId,
-          bookingSection: 'GENERAL',
-        });
 
-        toast.success('Appointment Confirmed! 🎉');
-        navigate('/my-appointments');
+        const appointmentId = data.appointmentId;
+
+        // Stripe flow: redirect to Checkout URL
+        if (data.provider === 'STRIPE') {
+          if (data.url) {
+            window.location.href = data.url;
+          } else {
+            toast.error('Stripe payment URL missing');
+          }
+          return;
+        }
+
+        // Razorpay flow: open JS checkout
+        if (data.provider === 'RAZORPAY') {
+          if (!window.Razorpay) {
+            toast.error('Razorpay SDK not loaded');
+            return;
+          }
+
+          const options = {
+            key: data.key, // from createBooking
+            amount: data.amount, // paise
+            currency: 'INR',
+            name: doctor.clinic?.name || 'Clinic',
+            description: `Consultation with ${doctor.name}`,
+            order_id: data.orderId,
+            prefill: {
+              name: user.name,
+              email: user.email,
+              contact: user.phone,
+            },
+            handler: async function (response) {
+              try {
+                await api.post(ENDPOINTS.PAYMENT.VERIFY_RAZORPAY, {
+                  appointmentId,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                });
+
+                toast.success('Appointment Confirmed! 🎉');
+                navigate('/my-appointments');
+              } catch (e) {
+                console.error(e);
+                toast.error(
+                  e.response?.data?.error ||
+                    'Payment succeeded, but booking verification failed'
+                );
+              }
+            },
+            modal: {
+              ondismiss: function () {
+                toast('Payment cancelled');
+              },
+            },
+            theme: {
+              color: '#0b3b5e',
+            },
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+          return;
+        }
+
+        toast.error('Unsupported payment provider');
+        return;
       }
+
+      // OFFLINE / FREE booking flow (your old logic)
+      await api.post(ENDPOINTS.USER.APPOINTMENTS, {
+        slotId: selectedSlot.id,
+        doctorId: doctor.id,
+        clinicId: finalClinicId,
+        bookingSection: 'GENERAL',
+      });
+
+      toast.success('Appointment Confirmed! 🎉');
+      navigate('/my-appointments');
     } catch (err) {
       const msg = err.response?.data?.error;
       const status = err.response?.status;
@@ -205,7 +276,9 @@ export default function UserBookingPage() {
       if (status === 409) {
         toast.error(msg || 'Slot already taken. Please pick another.');
         setSlots((prev) =>
-          prev.map((s) => (s.id === selectedSlot.id ? { ...s, isBooked: true } : s))
+          prev.map((s) =>
+            s.id === selectedSlot.id ? { ...s, isBooked: true } : s
+          )
         );
         setSelectedSlot(null);
       } else {
@@ -239,8 +312,9 @@ export default function UserBookingPage() {
   if (!doctor) return null;
 
   const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
-  const doctorInitial = doctor.name ? doctor.name.charAt(0).toUpperCase() : 'D';
-  // Use date string for passing check
+  const doctorInitial = doctor.name
+    ? doctor.name.charAt(0).toUpperCase()
+    : 'D';
   const selectedDateStr = selectedDate.toISOString().split('T')[0];
 
   return (
@@ -270,8 +344,12 @@ export default function UserBookingPage() {
               </span>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900">{doctor.name}</h2>
-            <p className="text-blue-600 font-medium mb-2">{doctor.speciality}</p>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {doctor.name}
+            </h2>
+            <p className="text-blue-600 font-medium mb-2">
+              {doctor.speciality}
+            </p>
             {doctor.clinic && (
               <div className="flex items-center justify-center gap-1 text-sm text-gray-500 bg-gray-50 py-2 rounded-lg">
                 <span>🏥</span> {doctor.clinic.name}
@@ -286,7 +364,12 @@ export default function UserBookingPage() {
               </h3>
             </div>
             <div className="p-4 flex justify-center booking-calendar-wrapper">
-              <DatePicker selected={selectedDate} onChange={(d) => setSelectedDate(d)} inline minDate={new Date()} />
+              <DatePicker
+                selected={selectedDate}
+                onChange={(d) => setSelectedDate(d)}
+                inline
+                minDate={new Date()}
+              />
             </div>
           </div>
         </div>
@@ -296,7 +379,9 @@ export default function UserBookingPage() {
           <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 h-full flex flex-col">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
               <div>
-                <h3 className="font-bold text-xl text-gray-900">Available Slots</h3>
+                <h3 className="font-bold text-xl text-gray-900">
+                  Available Slots
+                </h3>
                 <p className="text-sm text-gray-500">
                   For{' '}
                   {selectedDate.toLocaleDateString(undefined, {
@@ -307,7 +392,13 @@ export default function UserBookingPage() {
                 </p>
               </div>
               <div className="text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
-                {slots.filter((s) => !s.isBooked && !isSlotPassed(selectedDateStr, s.time)).length} Openings
+                {
+                  slots.filter(
+                    (s) =>
+                      !s.isBooked && !isSlotPassed(selectedDateStr, s.time)
+                  ).length
+                }{' '}
+                Openings
               </div>
             </div>
 
@@ -323,14 +414,20 @@ export default function UserBookingPage() {
             ) : (
               <div className="space-y-6">
                 {['Morning', 'Afternoon', 'Evening'].map((period) => {
-                  const periodSlots = slots.filter((s) => s.period === period);
+                  const periodSlots = slots.filter(
+                    (s) => s.period === period
+                  );
                   if (!periodSlots.length) return null;
 
                   return (
                     <div key={period}>
                       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
                         <span>
-                          {period === 'Morning' ? '☀️' : period === 'Afternoon' ? '🌤️' : '🌙'}
+                          {period === 'Morning'
+                            ? '☀️'
+                            : period === 'Afternoon'
+                            ? '🌤️'
+                            : '🌙'}
                         </span>
                         <span>{period}</span>
                       </div>
@@ -340,9 +437,10 @@ export default function UserBookingPage() {
                           const isSelected = selectedSlot?.id === slot.id;
                           const isFree = slot.paymentMode === 'FREE';
                           const isBooked = slot.isBooked === true;
-                          
-                          // ✅ Check if passed
-                          const isPassed = isSlotPassed(selectedDateStr, slot.time);
+                          const isPassed = isSlotPassed(
+                            selectedDateStr,
+                            slot.time
+                          );
                           const isDisabled = isBooked || isPassed;
 
                           return (
@@ -365,17 +463,27 @@ export default function UserBookingPage() {
                                 }
                               `}
                             >
-                              <div className={isPassed ? "line-through opacity-50" : ""}>
+                              <div
+                                className={
+                                  isPassed ? 'line-through opacity-50' : ''
+                                }
+                              >
                                 {to12Hour(slot.time)}
                               </div>
 
                               {isBooked ? (
-                                <div className="text-[10px] mt-0.5 text-gray-400">Booked</div>
+                                <div className="text-[10px] mt-0.5 text-gray-400">
+                                  Booked
+                                </div>
                               ) : isPassed ? (
-                                <div className="text-[10px] mt-0.5 text-red-300 font-medium">Passed</div>
+                                <div className="text-[10px] mt-0.5 text-red-300 font-medium">
+                                  Passed
+                                </div>
                               ) : (
                                 <div className="text-[10px] mt-0.5 text-gray-400">
-                                  {isFree ? 'Free' : formatPrice(slot.price)}
+                                  {isFree
+                                    ? 'Free'
+                                    : formatPrice(slot.price)}
                                 </div>
                               )}
                             </button>
@@ -396,9 +504,12 @@ export default function UserBookingPage() {
                       ✓
                     </div>
                     <div>
-                      <p className="text-sm text-green-800 font-bold">Slot Selected</p>
+                      <p className="text-sm text-green-800 font-bold">
+                        Slot Selected
+                      </p>
                       <p className="text-xs text-green-600">
-                        {selectedDate.toLocaleDateString()} at {to12Hour(selectedSlot.time)}
+                        {selectedDate.toLocaleDateString()} at{' '}
+                        {to12Hour(selectedSlot.time)}
                       </p>
                       <p className="text-xs text-green-700 font-semibold mt-1">
                         {selectedSlot.paymentMode === 'FREE'

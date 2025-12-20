@@ -1,4 +1,3 @@
-// src/features/admin/SlotsPage.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
 import ClinicAdminLayout from "../../layouts/ClinicAdminLayout.jsx";
@@ -7,8 +6,29 @@ import Modal from "../../components/Modal.jsx";
 import BulkSlotCreator from "./BulkSlotCreator";
 import toast from "react-hot-toast";
 import { ENDPOINTS } from "../../lib/endpoints";
+import DatePicker from "react-datepicker"; // ✅ Use DatePicker
+import "react-datepicker/dist/react-datepicker.css";
 
 const today = new Date().toISOString().split("T")[0];
+
+// Helper: Parse 24h string "HH:MM" to Date object
+const parseTime = (timeStr) => {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':');
+  const date = new Date();
+  date.setHours(Number(h));
+  date.setMinutes(Number(m));
+  date.setSeconds(0);
+  return date;
+};
+
+// Helper: Format Date object to "HH:MM" (24h) string
+const formatTime = (date) => {
+  if (!date) return "";
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+};
 
 export default function SlotsPage() {
   const [slots, setSlots] = useState([]);
@@ -27,11 +47,11 @@ export default function SlotsPage() {
   const [form, setForm] = useState({
     doctorId: "",
     date: today,
-    time: "",
+    time: "", // Stores "HH:MM" (24h) for backend
     duration: "30",
     price: "500",
     paymentMode: "ONLINE",
-    kind: "APPOINTMENT", // APPOINTMENT | BREAK
+    kind: "APPOINTMENT", 
   });
 
   const fetchDoctors = async () => {
@@ -80,7 +100,7 @@ export default function SlotsPage() {
     setEditingSlotId(null);
     setForm({
       doctorId,
-      date: selectedDate,
+      date: selectedDate, // Pre-fill with selected filter date
       time: "",
       duration: "30",
       price: "500",
@@ -93,10 +113,8 @@ export default function SlotsPage() {
   // Open edit modal
   const handleEditSlot = (slot) => {
     const kind = slot.kind || "APPOINTMENT";
-    const paymentMode =
-      kind === "BREAK" ? "FREE" : slot.paymentMode || "ONLINE";
-    const price =
-      kind === "BREAK" ? "0" : String(slot.price ?? 0);
+    const paymentMode = kind === "BREAK" ? "FREE" : slot.paymentMode || "ONLINE";
+    const price = kind === "BREAK" ? "0" : String(slot.price ?? 0);
 
     setEditingSlotId(slot.id);
     setForm({
@@ -115,9 +133,28 @@ export default function SlotsPage() {
   const handleCreateOrUpdateSlot = async (e) => {
     e.preventDefault();
 
+    // ✅ VALIDATION: Block Past Time
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    
+    // If selected date is in the past
+    if (form.date < todayStr) {
+        return toast.error("Cannot create slots for past dates.");
+    }
+
+    // If selected date is TODAY, check time
+    if (form.date === todayStr && form.time) {
+        const [h, m] = form.time.split(':').map(Number);
+        const currentH = now.getHours();
+        const currentM = now.getMinutes();
+        
+        if (h < currentH || (h === currentH && m <= currentM)) {
+            return toast.error("Cannot create slots for past time.");
+        }
+    }
+
     const isBreak = form.kind === "BREAK";
 
-    // ✅ enforce again before sending payload
     const payload = {
       ...form,
       duration: Number(form.duration),
@@ -160,6 +197,27 @@ export default function SlotsPage() {
   };
 
   const isBreak = form.kind === "BREAK";
+  
+  // Helper to filter passed times in DatePicker
+  const filterPassedTime = (time) => {
+    const selectedDateStr = form.date;
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+
+    // If date is in future, all times allowed
+    if (selectedDateStr > todayStr) return true;
+
+    // If date is past, disable all (though we block past dates too)
+    if (selectedDateStr < todayStr) return false;
+
+    // If TODAY, filter times
+    const currentDate = new Date(time);
+    const selectedDateWithTime = new Date();
+    selectedDateWithTime.setHours(currentDate.getHours());
+    selectedDateWithTime.setMinutes(currentDate.getMinutes());
+
+    return selectedDateWithTime > now;
+  };
 
   return (
     <ClinicAdminLayout>
@@ -263,46 +321,35 @@ export default function SlotsPage() {
                   {slots.map((slot) => (
                     <tr key={slot.id} className="hover:bg-blue-50/50">
                       <td className="px-4 py-3 font-mono font-bold text-gray-800">
-                        {slot.time}
+                        {/* Show 12h format in table too */}
+                        {new Date(`1970-01-01T${slot.time}`).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{slot.duration} mins</td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.kind === "BREAK"
-                              ? "bg-gray-200 text-gray-800"
-                              : "bg-indigo-100 text-indigo-800"
-                          }`}
-                        >
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            slot.kind === "BREAK" ? "bg-gray-200 text-gray-800" : "bg-indigo-100 text-indigo-800"
+                        }`}>
                           {slot.kind === "BREAK" ? "Break / Lunch" : "Appointment"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.paymentMode === "FREE"
-                              ? "bg-green-100 text-green-800"
-                              : slot.paymentMode === "ONLINE"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-orange-100 text-orange-800"
-                          }`}
-                        >
-                          {slot.paymentMode === "ONLINE"
-                            ? "Online Only"
-                            : slot.paymentMode === "OFFLINE"
-                              ? "Pay at Clinic"
-                              : "Free"}
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            slot.paymentMode === "FREE" ? "bg-green-100 text-green-800"
+                            : slot.paymentMode === "ONLINE" ? "bg-blue-100 text-blue-800"
+                            : "bg-orange-100 text-orange-800"
+                        }`}>
+                          {slot.paymentMode === "ONLINE" ? "Online Only"
+                           : slot.paymentMode === "OFFLINE" ? "Pay at Clinic"
+                           : "Free"}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-semibold text-green-700">
                         {slot.paymentMode === "FREE" ? "Free" : `₹${slot.price}`}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.isBooked ? "bg-red-100 text-red-800" : "bg-cyan-100 text-cyan-800"
-                          }`}
-                        >
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          slot.isBooked ? "bg-red-100 text-red-800" : "bg-cyan-100 text-cyan-800"
+                        }`}>
                           {slot.isBooked ? "Booked" : "Available"}
                         </span>
                       </td>
@@ -337,15 +384,37 @@ export default function SlotsPage() {
         title={editingSlotId ? "Edit Slot" : "Create New Slot"}
       >
         <form onSubmit={handleCreateOrUpdateSlot} className="space-y-4 p-1">
+          {/* ✅ DATE PICKER (Standard HTML Input for Date) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
             <input
-              type="time"
-              className="input w-full"
-              value={form.time}
-              onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))}
-              required
+                type="date"
+                className="input w-full"
+                value={form.date}
+                min={today} // HTML5 min attribute block past dates
+                onChange={(e) => setForm(prev => ({ ...prev, date: e.target.value }))}
+                required
             />
+          </div>
+
+          {/* ✅ TIME PICKER (12h format with DatePicker) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Time (Start)</label>
+            <DatePicker
+                selected={parseTime(form.time)}
+                onChange={(date) => setForm(prev => ({ ...prev, time: formatTime(date) }))}
+                showTimeSelect
+                showTimeSelectOnly
+                timeIntervals={15}
+                timeCaption="Time"
+                dateFormat="h:mm aa"
+                placeholderText="Select Time"
+                filterTime={filterPassedTime} // ✅ Block past times
+                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                required
+            />
+             {/* Fallback hidden input for required validation if DatePicker fails */}
+             <input type="hidden" value={form.time} required />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -363,7 +432,6 @@ export default function SlotsPage() {
               />
             </div>
 
-            {/* ✅ Price only makes sense for APPOINTMENT and non-FREE */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
               <input
