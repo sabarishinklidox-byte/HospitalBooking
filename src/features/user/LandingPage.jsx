@@ -144,9 +144,10 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {clinics.map((clinic, idx) => {
                 const banner = toFullUrl(clinic.banner) || DEFAULT_BANNER;
-                const logo = toFullUrl(clinic.logo) || DEFAULT_LOGO;
 
-                // robust rating parsing
+                // logo: use uploaded if present and valid, else default
+                const logoSrc = toFullUrl(clinic.logo) || DEFAULT_LOGO;
+
                 const ratingRaw = clinic.googleRating;
                 const rating =
                   ratingRaw != null && ratingRaw !== ''
@@ -185,12 +186,15 @@ export default function LandingPage() {
 
                     {/* Card body */}
                     <div className="p-6 pt-10 relative">
-                      {/* Logo */}
+                      {/* Logo – uploaded if ok, else default */}
                       <div className="absolute -top-10 left-6 p-1 bg-white rounded-xl shadow-lg">
                         <img
-                          src={logo}
+                          src={logoSrc}
                           className="w-16 h-16 object-contain rounded-lg"
                           alt={`${clinic.name} logo`}
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_LOGO;
+                          }}
                         />
                       </div>
 
