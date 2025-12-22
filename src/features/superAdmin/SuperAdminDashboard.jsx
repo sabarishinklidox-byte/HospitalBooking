@@ -92,26 +92,45 @@ export default function SuperAdminDashboard() {
   };
 
   const fetchPlans = async () => {
-    try {
-      setLoadingPlans(true);
-      const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
-      const list = res.data || [];
-      const active = list.filter((p) => p.isActive !== false);
-
-      setPlans(active);
-
-      setClinicForm((prev) => ({
-        ...prev,
-        planId: prev.planId || active?.[0]?.id || "",
-      }));
-    } catch (err) {
-      console.error("Load plans error", err);
-      toast.error("Failed to load plans");
+  try {
+    setLoadingPlans(true);
+    const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
+    
+    console.log('🔍 SuperAdminDashboard fetchPlans res.data:', res.data);
+    console.log('📊 Is Array?', Array.isArray(res.data));
+    
+    // ROBUST: Handle ALL response formats
+    let list = [];
+    if (Array.isArray(res.data)) {
+      list = res.data;
+    } else if (res.data && Array.isArray(res.data.plans)) {
+      list = res.data.plans;
+    } else if (res.data && Array.isArray(res.data.data)) {
+      list = res.data.data;
+    } else {
+      console.error('❌ No valid plans array found');
       setPlans([]);
-    } finally {
       setLoadingPlans(false);
+      return;
     }
-  };
+    
+    const active = list.filter((p) => p.isActive !== false);
+    console.log('✅ Active plans:', active);
+    
+    setPlans(active);
+    setClinicForm((prev) => ({
+      ...prev,
+      planId: prev.planId || active?.[0]?.id || "",
+    }));
+  } catch (err) {
+    console.error("Load plans error", err);
+    toast.error("Failed to load plans");
+    setPlans([]);
+  } finally {
+    setLoadingPlans(false);
+  }
+};
+
 
   useEffect(() => {
     fetchStats();

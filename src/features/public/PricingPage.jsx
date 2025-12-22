@@ -21,24 +21,51 @@ export default function PricingPage() {
   const blobsRef = useRef([]);
 
   // Load Data
-  useEffect(() => {
-    const loadPlans = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
-        setPlans(
-          res.data
-            .filter(p => p.isActive && !p.deletedAt)
-            .sort((a, b) => Number(a.priceMonthly) - Number(b.priceMonthly))
-        );
-      } catch {
-        toast.error('Failed to load plans');
-      } finally {
+useEffect(() => {
+  const loadPlans = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Fetching plans from:', ENDPOINTS.PUBLIC.PLANS);
+      const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
+      
+      // LOGS FIRST
+      console.log('📦 FULL API Response:', res);
+      console.log('📋 res.data:', res.data);
+      console.log('🔍 Type of res.data:', typeof res.data);
+      console.log('📊 Is Array?', Array.isArray(res.data));
+      
+      // SAFE HANDLING - REPLACE THE BROKEN LINE
+      let plansData = [];
+      if (Array.isArray(res.data)) {
+        plansData = res.data;
+      } else if (res.data && Array.isArray(res.data.plans)) {
+        plansData = res.data.plans;
+      } else if (res.data && Array.isArray(res.data.data)) {
+        plansData = res.data.data;
+      } else {
+        console.error('❌ No valid plans array found');
+        setPlans([]);
         setLoading(false);
+        return;
       }
-    };
-    loadPlans();
-  }, []);
+      
+      const filteredPlans = plansData
+        .filter(p => p.isActive && !p.deletedAt)
+        .sort((a, b) => Number(a.priceMonthly) - Number(b.priceMonthly));
+      
+      console.log('✅ Filtered plans:', filteredPlans);
+      setPlans(filteredPlans);
+      
+    } catch (error) {
+      console.error('💥 Plans load error:', error);
+      toast.error('Failed to load pricing plans');
+      setPlans([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  loadPlans();
+}, []);
 
   // ANIMATIONS
   useEffect(() => {

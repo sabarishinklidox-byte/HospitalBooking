@@ -50,7 +50,7 @@ import UserBookingPage from './features/user/UserBookingPage.jsx';
 import MyAppointmentsPage from './features/user/MyAppointmentsPage.jsx';
 import UserProfilePage from './features/user/UserProfilePage.jsx';
 import ClinicPublicPage from './features/user/ClinicPublicPage.jsx';
-
+import ClinicDetailPage from './features/user/ClinicDetailPage.jsx'
 // ✅ PAYMENT SUCCESS
 import PaymentSuccessPage from './features/payment/PaymentSuccessPage.jsx';
 
@@ -144,7 +144,7 @@ function AppContent() {
         <Route path="/signup" element={<UserSignup />} />
         <Route path="/visit/:clinicId" element={<ClinicPublicPage />} />
         <Route path="/register" element={<OrganizationRegisterPage />} />
-
+<Route path="/clinics/:clinicId" element={<ClinicDetailPage />} />
         {/* LOGIN ROUTES */}
         <Route path="/super-admin/login" element={<SuperAdminLogin />} />
         <Route path="/doctor/login" element={<DoctorLogin />} />

@@ -1,4 +1,11 @@
-import React, { useEffect, useState } from 'react';
+// src/features/user/UserBookingPage.jsx
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import DatePicker from 'react-datepicker';
@@ -23,7 +30,7 @@ const formatPrice = (price) =>
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 0,
-  }).format(price);
+  }).format(Number(price || 0));
 
 const getPeriodFromTime = (timeStr) => {
   if (!timeStr) return 'Morning';
@@ -45,7 +52,6 @@ const to12Hour = (timeStr) => {
   return `${pad(hour)}:${pad(parseInt(minute, 10))} ${ampm}`;
 };
 
-// ✅ HELPER: Check if a slot time has passed
 const isSlotPassed = (slotDateStr, slotTimeStr) => {
   if (!slotDateStr || !slotTimeStr) return false;
 
@@ -65,6 +71,14 @@ const isSlotPassed = (slotDateStr, slotTimeStr) => {
   return false;
 };
 
+const pad2 = (n) => String(n).padStart(2, '0');
+const formatCountdown = (seconds) => {
+  const s = Math.max(0, Number(seconds || 0));
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${pad2(mm)}:${pad2(ss)}`;
+};
+
 export default function UserBookingPage() {
   const { doctorId } = useParams();
   const location = useLocation();
@@ -79,80 +93,152 @@ export default function UserBookingPage() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [error, setError] = useState('');
 
-  // 1. Fetch Doctor
+  // payment hold / countdown
+  const [hold, setHold] = useState(null);
+  const [holdLeftSec, setHoldLeftSec] = useState(0);
+  const holdTimerRef = useRef(null);
+
+  const selectedDateStr = useMemo(
+    () => selectedDate?.toISOString?.().split('T')[0],
+    [selectedDate]
+  );
+
+  // URLs from ENDPOINTS only
+  const DOCTOR_URL = useMemo(
+    () => ENDPOINTS.PUBLIC.DOCTOR_BY_ID(doctorId),
+    [doctorId]
+  );
+  const SLOTS_URL = useMemo(
+    () => ENDPOINTS.PUBLIC.DOCTOR_SLOTS(doctorId),
+    [doctorId]
+  );
+  const CREATE_BOOKING_URL = ENDPOINTS.PAYMENT.CREATE_BOOKING;
+  const VERIFY_RAZORPAY_URL = ENDPOINTS.PAYMENT.VERIFY_RAZORPAY;
+
+  const stopHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+    holdTimerRef.current = null;
+  }, []);
+
+ const startHoldTimer = useCallback(
+  (expiresAtMs, fetchSlotsFn) => {
+    stopHoldTimer();
+    const tick = () => {
+      const left = Math.ceil((expiresAtMs - Date.now()) / 1000);
+      setHoldLeftSec(Math.max(0, left));
+      if (left <= 0) {
+        stopHoldTimer();
+        toast.error('Payment hold expired. Please select slot & book again.', {
+          duration: 5000,
+        });
+        setHold(null);
+        if (fetchSlotsFn) fetchSlotsFn(); // ✅ Safe call
+        return;
+      }
+    };
+    tick();
+    holdTimerRef.current = setInterval(tick, 1000);
+  },
+  [stopHoldTimer] // ✅ Keep only stable deps
+);
+
+
+  // 1) Fetch doctor
   useEffect(() => {
     if (doctor) return;
+    let alive = true;
+
     const fetchDoctor = async () => {
       setLoading(true);
       try {
-        const res = await api.get(ENDPOINTS.PUBLIC.DOCTOR_BY_ID(doctorId));
+        const res = await api.get(DOCTOR_URL);
+        if (!alive) return;
         setDoctor(res.data);
       } catch (err) {
+        if (!alive) return;
         setError('Doctor not found.');
         toast.error('Doctor not found');
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     };
+
     fetchDoctor();
-  }, [doctorId, doctor]);
-
-  // 2. Fetch Slots
-  useEffect(() => {
-    if (!doctor || !selectedDate) return;
-
-    const fetchSlots = async () => {
-      setLoading(true);
-      setError('');
-      const formattedDate = selectedDate.toISOString().split('T')[0];
-
-      try {
-        const clinicId = doctor.clinicId || doctor.clinic?.id;
-        if (!clinicId) {
-          setSlots([]);
-          setSelectedSlot(null);
-          toast.error('System Error: Missing Clinic ID');
-          return;
-        }
-
-        const res = await api.get(ENDPOINTS.PUBLIC.SLOTS, {
-          params: { clinicId, doctorId: doctor.id, date: formattedDate },
-        });
-
-        const list = res.data?.data || res.data || [];
-
-        const withPeriod = list.map((s) => ({
-          ...s,
-          isBooked: Boolean(s.isBooked),
-          period: s.period || getPeriodFromTime(s.time),
-        }));
-
-        setSlots(withPeriod);
-
-        if (
-          selectedSlot &&
-          withPeriod.some((s) => s.id === selectedSlot.id && s.isBooked)
-        ) {
-          setSelectedSlot(null);
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error(err?.response?.data?.error || 'Failed to load slots');
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      alive = false;
     };
+  }, [DOCTOR_URL, doctor]);
 
+  const fetchSlots = useCallback(async () => {
+    if (!doctor || !selectedDateStr) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await api.get(SLOTS_URL, { params: { date: selectedDateStr } });
+
+      const list = res.data?.slots || res.data?.data || res.data || [];
+      const normalized = (Array.isArray(list) ? list : []).map((s) => ({
+        ...s,
+        isBooked: Boolean(s.isBooked),
+        period: s.period || getPeriodFromTime(s.time),
+      }));
+
+      setSlots(normalized);
+
+      if (
+        selectedSlot &&
+        normalized.some((s) => s.id === selectedSlot.id && s.isBooked)
+      ) {
+        setSelectedSlot(null);
+        toast.error('Slot just got booked. Please pick another.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || 'Failed to load slots');
+    } finally {
+      setLoading(false);
+    }
+  }, [SLOTS_URL, doctor, selectedDateStr, selectedSlot]);
+
+  useEffect(() => {
     fetchSlots();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doctor, selectedDate]);
+  }, [fetchSlots]);
 
-  // 3. Booking Handler
+  // refresh slots every 30s
+  useEffect(() => {
+    if (!doctor) return;
+    const id = setInterval(() => {
+      fetchSlots();
+    }, 30000);
+    return () => clearInterval(id);
+  }, [doctor, fetchSlots]);
+
+  useEffect(() => () => stopHoldTimer(), [stopHoldTimer]);
+
+  const availableSlots = useMemo(
+    () =>
+      slots.filter(
+        (s) => !s.isBooked && !isSlotPassed(selectedDateStr, s.time)
+      ),
+    [slots, selectedDateStr]
+  );
+  const freeSlotsCount = useMemo(
+    () => availableSlots.filter((s) => s.paymentMode === 'FREE').length,
+    [availableSlots]
+  );
+  const paidSlotsCount = useMemo(
+    () => availableSlots.filter((s) => s.paymentMode !== 'FREE').length,
+    [availableSlots]
+  );
+
+  // 3) Book
   const handleBookNow = async () => {
     if (!selectedSlot) return;
 
     if (!token || !user) {
-      toast('Please login to continue booking', { icon: '🔒' });
+      toast('Please login to continue booking');
       navigate('/login', { state: { from: location, doctor } });
       return;
     }
@@ -166,115 +252,151 @@ export default function UserBookingPage() {
     try {
       setBookingLoading(true);
 
-      const finalClinicId = doctor.clinicId || doctor.clinic?.id;
-      if (!finalClinicId) {
-        toast.error('System Error: Missing Clinic ID');
+      const paymentMethod =
+        selectedSlot.paymentMode === 'FREE'
+          ? 'FREE'
+          : selectedSlot.paymentMode === 'OFFLINE'
+          ? 'OFFLINE'
+          : 'ONLINE';
+
+      const res = await api.post(CREATE_BOOKING_URL, {
+        slotId: selectedSlot.id,
+        paymentMethod,
+      });
+
+      const data = res.data;
+      console.log('CREATE_BOOKING response:', data);
+
+      if (!data?.success) {
+        toast.error(data?.error || 'Booking failed');
         return;
       }
 
-      // ONLINE booking → go through createBooking (backend decides Stripe/Razorpay)
-      if (selectedSlot.paymentMode === 'ONLINE') {
-        const res = await api.post(ENDPOINTS.PAYMENT.CREATE_BOOKING, {
-          slotId: selectedSlot.id,
-          userId: user.id,
-          paymentMethod: 'ONLINE',
-          // optional: provider hint, or let backend choose by active gateway
-          // provider: 'RAZORPAY' | 'STRIPE'
+      // FREE / OFFLINE flows
+      if (!data.isOnline) {
+        toast.success(data.message || 'Appointment confirmed');
+        navigate('/my-appointments');
+        return;
+      }
+
+      // ONLINE hold
+      console.log('expiresIn from API:', data.expiresIn);
+      const expiresIn =
+        typeof data.expiresIn === 'number'
+          ? data.expiresIn
+          : Number(data.expiresIn || 0);
+
+      if (!expiresIn || expiresIn <= 0) {
+        toast.error('Booking hold expired. Please select slot & book again.', {
+          duration: 5000,
         });
+        fetchSlots();
+        return;
+      }
 
-        const data = res.data;
+      // ✅ must compute expiresAtMs here
+      const expiresAtMs = Date.now() + expiresIn * 1000;
 
-        if (!data.success || !data.isOnline) {
-          toast.error(data.error || 'Failed to start online payment');
+      console.log('expiresIn from API:', data.expiresIn, 'computed:', expiresIn);
+
+      setHold({
+        appointmentId: data.appointmentId,
+        provider: data.provider,
+        expiresAtMs,
+        orderId: data.orderId,
+        sessionId: data.sessionId,
+        url: data.url,
+        key: data.key,
+        amount: data.amount,
+      });
+      startHoldTimer(expiresAtMs, fetchSlots); // ✅ Pass fetchSlots
+
+      // STRIPE redirect
+      if (data.provider === 'STRIPE') {
+        if (!data.url) {
+          toast.error('Stripe payment URL missing');
+          return;
+        }
+        window.location.href = data.url;
+        return;
+      }
+
+      // RAZORPAY checkout
+      if (data.provider === 'RAZORPAY') {
+        if (!window.Razorpay) {
+          toast.error(
+            'Razorpay SDK not loaded. Add checkout.js in index.html.'
+          );
           return;
         }
 
-        const appointmentId = data.appointmentId;
+        const options = {
+          key: data.key,
+          amount: data.amount,
+          currency: 'INR',
+          name: doctor?.clinic?.name || 'Clinic',
+          description: `Consultation with ${doctor?.name || 'Doctor'}`,
+          order_id: data.orderId,
+          prefill: {
+            name: user?.name || '',
+            email: user?.email || '',
+            contact: user?.phone || '',
+          },
+          handler: async function (response) {
+            try {
+              const token = localStorage.getItem('token');
 
-        // Stripe flow: redirect to Checkout URL
-        if (data.provider === 'STRIPE') {
-          if (data.url) {
-            window.location.href = data.url;
-          } else {
-            toast.error('Stripe payment URL missing');
-          }
-          return;
-        }
-
-        // Razorpay flow: open JS checkout
-        if (data.provider === 'RAZORPAY') {
-          if (!window.Razorpay) {
-            toast.error('Razorpay SDK not loaded');
-            return;
-          }
-
-          const options = {
-            key: data.key, // from createBooking
-            amount: data.amount, // paise
-            currency: 'INR',
-            name: doctor.clinic?.name || 'Clinic',
-            description: `Consultation with ${doctor.name}`,
-            order_id: data.orderId,
-            prefill: {
-              name: user.name,
-              email: user.email,
-              contact: user.phone,
-            },
-            handler: async function (response) {
-              try {
-                await api.post(ENDPOINTS.PAYMENT.VERIFY_RAZORPAY, {
-                  appointmentId,
+              await api.post(
+                VERIFY_RAZORPAY_URL,
+                {
+                  appointmentId: data.appointmentId,
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
-                });
+                },
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
 
-                toast.success('Appointment Confirmed! 🎉');
-                navigate('/my-appointments');
-              } catch (e) {
-                console.error(e);
-                toast.error(
-                  e.response?.data?.error ||
-                    'Payment succeeded, but booking verification failed'
-                );
-              }
+              stopHoldTimer();
+              setHold(null);
+              toast.success('Appointment confirmed');
+              navigate('/my-appointments');
+            } catch (e) {
+              console.error(e);
+              toast.error(
+                e.response?.data?.error ||
+                  'Payment captured. Confirmation will reflect shortly.'
+              );
+              navigate('/my-appointments');
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              toast('Payment cancelled/closed. Slot is held temporarily.');
+              fetchSlots();
             },
-            modal: {
-              ondismiss: function () {
-                toast('Payment cancelled');
-              },
-            },
-            theme: {
-              color: '#0b3b5e',
-            },
-          };
+          },
+          theme: { color: '#0b3b5e' },
+        };
 
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-          return;
-        }
-
-        toast.error('Unsupported payment provider');
+        const rzp = new window.Razorpay(options);
+        rzp.open();
         return;
       }
 
-      // OFFLINE / FREE booking flow (your old logic)
-      await api.post(ENDPOINTS.USER.APPOINTMENTS, {
-        slotId: selectedSlot.id,
-        doctorId: doctor.id,
-        clinicId: finalClinicId,
-        bookingSection: 'GENERAL',
-      });
-
-      toast.success('Appointment Confirmed! 🎉');
-      navigate('/my-appointments');
+      toast.error('Unsupported payment provider');
     } catch (err) {
-      const msg = err.response?.data?.error;
-      const status = err.response?.status;
+      const msg = err?.response?.data?.error;
+      const status = err?.response?.status;
+
       console.error('Booking Error:', err);
 
       if (status === 409) {
-        toast.error(msg || 'Slot already taken. Please pick another.');
+        toast.error(msg || 'Slot just got booked. Please pick another.');
         setSlots((prev) =>
           prev.map((s) =>
             s.id === selectedSlot.id ? { ...s, isBooked: true } : s
@@ -312,15 +434,12 @@ export default function UserBookingPage() {
   if (!doctor) return null;
 
   const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
-  const doctorInitial = doctor.name
-    ? doctor.name.charAt(0).toUpperCase()
-    : 'D';
-  const selectedDateStr = selectedDate.toISOString().split('T')[0];
+  const doctorInitial = doctor.name ? doctor.name.charAt(0).toUpperCase() : 'D';
 
   return (
     <UserLayout>
       <div className="max-w-6xl mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT: Doctor & Calendar */}
+        {/* LEFT */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
             <div className="w-28 h-28 mx-auto bg-[#003366] rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-md overflow-hidden text-white relative">
@@ -344,12 +463,11 @@ export default function UserBookingPage() {
               </span>
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900">
-              {doctor.name}
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900">{doctor.name}</h2>
             <p className="text-blue-600 font-medium mb-2">
               {doctor.speciality}
             </p>
+
             {doctor.clinic && (
               <div className="flex items-center justify-center gap-1 text-sm text-gray-500 bg-gray-50 py-2 rounded-lg">
                 <span>🏥</span> {doctor.clinic.name}
@@ -374,10 +492,10 @@ export default function UserBookingPage() {
           </div>
         </div>
 
-        {/* RIGHT: Slots */}
+        {/* RIGHT */}
         <div className="lg:col-span-8">
           <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 h-full flex flex-col">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
               <div>
                 <h3 className="font-bold text-xl text-gray-900">
                   Available Slots
@@ -391,16 +509,41 @@ export default function UserBookingPage() {
                   })}
                 </p>
               </div>
-              <div className="text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
-                {
-                  slots.filter(
-                    (s) =>
-                      !s.isBooked && !isSlotPassed(selectedDateStr, s.time)
-                  ).length
-                }{' '}
-                Openings
+
+              <div className="flex gap-2 text-xs sm:text-sm">
+                <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full font-medium">
+                  {availableSlots.length} Open
+                </span>
+                <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
+                  {freeSlotsCount} Free
+                </span>
+                <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full font-medium">
+                  {paidSlotsCount} Paid
+                </span>
               </div>
             </div>
+
+            {hold && holdLeftSec > 0 && (
+              <div className="mb-5 bg-amber-50 border border-amber-200 p-3 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="text-sm text-amber-900">
+                  Payment hold active ({hold.provider}). Complete payment within{' '}
+                  <span className="font-bold">
+                    {formatCountdown(holdLeftSec)}
+                  </span>
+                  .
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchSlots();
+                    toast('Slots refreshed');
+                  }}
+                  className="text-xs px-3 py-1 rounded-lg bg-amber-100 text-amber-900 font-semibold hover:bg-amber-200"
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
 
             {loading ? (
               <div className="flex-1 flex items-center justify-center py-12">
@@ -458,8 +601,8 @@ export default function UserBookingPage() {
                                   isDisabled
                                     ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
                                     : isSelected
-                                    ? 'bg-white text-blue-600 border-blue-500 shadow-sm'
-                                    : 'bg-white text-gray-700 border-blue-300 hover:bg-blue-50'
+                                    ? 'bg-white text-blue-600 border-blue-500 shadow-sm ring-2 ring-blue-200'
+                                    : 'bg-white text-gray-700 border-blue-300 hover:bg-blue-50 hover:border-blue-400'
                                 }
                               `}
                             >
@@ -481,9 +624,7 @@ export default function UserBookingPage() {
                                 </div>
                               ) : (
                                 <div className="text-[10px] mt-0.5 text-gray-400">
-                                  {isFree
-                                    ? 'Free'
-                                    : formatPrice(slot.price)}
+                                  {isFree ? 'Free' : formatPrice(slot.price)}
                                 </div>
                               )}
                             </button>
@@ -498,7 +639,7 @@ export default function UserBookingPage() {
 
             <div className="mt-auto pt-8">
               {selectedSlot ? (
-                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-lg">
                       ✓
@@ -513,7 +654,7 @@ export default function UserBookingPage() {
                       </p>
                       <p className="text-xs text-green-700 font-semibold mt-1">
                         {selectedSlot.paymentMode === 'FREE'
-                          ? '✨ Free Consultation'
+                          ? 'Free Consultation'
                           : `${formatPrice(selectedSlot.price)} (${
                               selectedSlot.paymentMode === 'OFFLINE'
                                 ? 'Pay at Clinic'
@@ -528,13 +669,13 @@ export default function UserBookingPage() {
                     disabled={bookingLoading}
                     className="w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-md transition-transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {token
-                      ? bookingLoading
-                        ? 'Processing...'
-                        : selectedSlot.paymentMode === 'ONLINE'
-                        ? 'Pay & Book'
-                        : 'Confirm Booking'
-                      : 'Login to Confirm'}
+                    {!token
+                      ? 'Login to Confirm'
+                      : bookingLoading
+                      ? 'Processing...'
+                      : selectedSlot.paymentMode === 'ONLINE'
+                      ? 'Pay & Book'
+                      : 'Confirm Booking'}
                   </button>
                 </div>
               ) : (

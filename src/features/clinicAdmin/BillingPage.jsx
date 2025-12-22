@@ -20,17 +20,34 @@ export default function BillingPage() {
   const [upgradingPlanId, setUpgradingPlanId] = useState(null);
 
   const loadPlans = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
-      setPlans(res.data.filter((p) => p.isActive && !p.deletedAt));
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to load plans');
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
+    
+    // ✅ ROBUST - Handle all response formats
+    let plansData = [];
+    if (Array.isArray(res.data)) {
+      plansData = res.data;
+    } else if (res.data && Array.isArray(res.data.plans)) {
+      plansData = res.data.plans;
+    } else if (res.data && Array.isArray(res.data.data)) {
+      plansData = res.data.data;
+    } else {
+      console.error('No valid plans array:', res.data);
+      setPlans([]);
+      return;
     }
-  };
+    
+    setPlans(plansData.filter((p) => p.isActive && !p.deletedAt));
+  } catch (err) {
+    console.error(err);
+    toast.error('Failed to load plans');
+    setPlans([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     loadPlans();

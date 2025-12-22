@@ -38,19 +38,42 @@ export default function PlansPage() {
   };
 
   const [form, setForm] = useState(emptyForm);
-
-  const loadPlans = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
-      setPlans(res.data);
-    } catch (err) {
-      toast.error('Failed to load plans');
-    } finally {
+const loadPlans = async () => {
+  setLoading(true);
+  try {
+    console.log('🔄 SuperAdmin loading plans from:', ENDPOINTS.SUPER_ADMIN.PLANS);
+    const res = await api.get(ENDPOINTS.SUPER_ADMIN.PLANS);
+    
+    console.log('📦 Plans API Response:', res);
+    console.log('📋 res.data:', res.data);
+    console.log('🔍 Type of res.data:', typeof res.data);
+    console.log('📊 Is Array?', Array.isArray(res.data));
+    
+    // SAFE HANDLING - Fix the crash
+    let plansData = [];
+    if (Array.isArray(res.data)) {
+      plansData = res.data;
+    } else if (res.data && Array.isArray(res.data.plans)) {
+      plansData = res.data.plans;
+    } else if (res.data && Array.isArray(res.data.data)) {
+      plansData = res.data.data;
+    } else {
+      console.error('❌ No valid plans array found in SuperAdmin response');
+      setPlans([]);
       setLoading(false);
+      return;
     }
-  };
-
+    
+    console.log('✅ SuperAdmin loaded', plansData.length, 'plans');
+    setPlans(plansData);  // Now it's ALWAYS an array
+  } catch (err) {
+    console.error('💥 SuperAdmin plans error:', err);
+    toast.error('Failed to load plans');
+    setPlans([]);  // Always set to empty array
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => {
     loadPlans();
   }, []);

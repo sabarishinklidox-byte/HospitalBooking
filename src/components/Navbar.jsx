@@ -57,10 +57,16 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                 <Link to="/" className="text-sm font-semibold text-gray-600 hover:text-[#003366] transition-colors">
-                  Find Doctors
-                </Link>
-                <div className="h-5 w-px bg-gray-300"></div>
+                 <div className="flex justify-center mt-4">
+  <Link
+    to="/"
+    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 text-sm font-semibold text-gray-700 shadow-sm hover:bg-[#003366] hover:text-white hover:border-[#003366] transition-colors"
+  >
+    <span></span>
+    <span>Find Doctors</span>
+  </Link>
+</div>
+              
               </>
             )}
           </div>
