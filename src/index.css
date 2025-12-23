@@ -289,3 +289,139 @@ html, body {
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+.doctor-card-grid .parent {
+  width: 290px;
+  height: 320px;
+  perspective: 1000px;
+}
+
+.doctor-card-grid .card {
+  width: 280px;
+  height: 300px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 3px;
+  position: relative;
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+}
+
+.doctor-card-grid .card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.12);
+}
+
+/* PHOTO STARTS CENTERED, MOVES LEFT ON HOVER */
+.doctor-card-grid .card .profile-pic {
+  position: absolute;
+  width: 120px;  /* Smaller initial size */
+  height: 120px;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 24px;
+  z-index: 3;
+  border: 4px solid #e0f2fe;
+  overflow: hidden;
+  background: #e0f2fe;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.doctor-card-grid .card .profile-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.doctor-card-grid .card .profile-pic-initial {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b3b5e;
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+/* ON HOVER: PHOTO MOVES TO LEFT CORNER */
+.doctor-card-grid .card:hover .profile-pic {
+  left: 20px;
+  top: 20px;
+  transform: none;
+  width: 100px;
+  height: 100px;
+}
+
+/* BOTTOM PANEL - ALWAYS VISIBLE, SLIDES UP MORE ON HOVER */
+.doctor-card-grid .card .bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  top: 50%;  /* Always visible from 50% height */
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0b3b5e, #0284c7);
+  z-index: 2;
+  box-shadow: inset 0 4px 8px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.doctor-card-grid .card:hover .bottom {
+  top: 38%;  /* Slides up higher on hover */
+  border-radius: 28px 20px 20px 20px;
+}
+
+.doctor-card-grid .card .bottom .content {
+  position: absolute;
+  bottom: 0;
+  left: 1.3rem;
+  right: 1.3rem;
+  height: 140px;  /* Taller for always-visible content */
+}
+
+.doctor-card-grid .card .bottom .content .name {
+  display: block;
+  font-size: 1.1rem;
+  color: #ffffff;
+  font-weight: 700;
+  margin-top: 0.5rem;  /* Space from top */
+}
+
+.doctor-card-grid .card .bottom .content .about-me {
+  display: block;
+  font-size: 0.85rem;
+  color: #e0f2fe;
+  margin-top: 0.2rem;
+}
+
+.doctor-card-grid .card .bottom .bottom-bottom {
+  position: absolute;
+  bottom: 0.8rem;
+  left: 1.3rem;
+  right: 1.3rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.doctor-card-grid .card .bottom .bottom-bottom .button {
+  background: #ffffff;
+  color: #0b3b5e;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.25);
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.doctor-card-grid .card .bottom .bottom-bottom .button:hover {
+  background: #e0f2fe;
+  transform: translateY(-1px);
+}

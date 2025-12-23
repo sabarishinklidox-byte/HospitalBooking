@@ -1,4 +1,3 @@
-// src/features/clinicAdmin/DoctorsPage.jsx
 import React, { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
@@ -30,8 +29,30 @@ const INITIAL_FORM = {
   password: '',
 };
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; // e.g., http://localhost:5000/api
+
+/**
+ * ✅ FIXED URL BUILDER
+ * Ensures the final URL points to http://localhost:5000/uploads/...
+ * even if the base URL contains /api.
+ */
+const buildAvatarUrl = (raw) => {
+  if (!raw) return null;
+
+  // If backend already sends full URL, just use it
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return raw;
+  }
+
+  // Get origin without /api -> http://localhost:5000
+  const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+
+  // Ensure leading slash on path from DB
+  const path = raw.startsWith('/') ? raw : `/${raw}`; // '/uploads/xyz.jpg'
+
+  // Final URL: http://localhost:5000/uploads/xyz.jpg
+  return `${origin}${path}`;
+};
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState([]);
@@ -46,8 +67,10 @@ export default function DoctorsPage() {
     try {
       setLoading(true);
       const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
-      setDoctors(res.data || []);
+      const list = Array.isArray(res.data) ? res.data : res.data.doctors || [];
+      setDoctors(list);
     } catch (err) {
+      console.error('fetchDoctors error', err.response?.data || err);
       toast.error(err.response?.data?.error || 'Failed to load doctors');
     } finally {
       setLoading(false);
@@ -95,8 +118,6 @@ export default function DoctorsPage() {
 
     if (avatarFile) {
       formData.append('avatar', avatarFile);
-    } else if (editingDoctorId && form.avatar) {
-      formData.append('avatar', form.avatar);
     }
 
     if (form.password) {
@@ -161,7 +182,6 @@ export default function DoctorsPage() {
   return (
     <ClinicAdminLayout>
       <div className="w-full px-3 sm:px-6 py-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h1
@@ -177,7 +197,7 @@ export default function DoctorsPage() {
           </div>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm text-white"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: 'var(--color-action)' }}
           >
             <span className="text-lg leading-none">＋</span>
@@ -218,92 +238,55 @@ export default function DoctorsPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50/80 border-b border-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Speciality
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Experience
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Phone
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                      Actions
-                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Speciality</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Experience</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Phone</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {doctors.map((doc) => (
-                    <tr
-                      key={doc.id}
-                      className="hover:bg-gray-50/80 transition-colors"
-                    >
+                    <tr key={doc.id} className="hover:bg-gray-50/80 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-blue-700 border border-blue-100 overflow-hidden">
+                          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-blue-700 border border-blue-100 overflow-hidden">
                             {doc.avatar ? (
                               <img
-                                src={
-                                  doc.avatar.startsWith('http')
-                                    ? doc.avatar
-                                    : `${API_BASE_URL}${doc.avatar}`
-                                }
+                                src={buildAvatarUrl(doc.avatar)}
                                 alt={doc.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
+                                  // ✅ Prevent infinite reload loop
+                                  e.currentTarget.onerror = null; 
+                                  e.currentTarget.parentElement.innerHTML = `<span>${doc.name.charAt(0).toUpperCase()}</span>`;
                                 }}
                               />
                             ) : (
-                              <span>
-                                {doc.name
-                                  ? doc.name.charAt(0).toUpperCase()
-                                  : '?'}
-                              </span>
+                              <span>{doc.name ? doc.name.charAt(0).toUpperCase() : '?'}</span>
                             )}
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900">
-                              {doc.name}
-                            </p>
-                            {doc.userEmail && (
-                              <p className="text-xs text-gray-400">
-                                {doc.userEmail}
-                              </p>
-                            )}
+                            <p className="font-semibold text-gray-900">{doc.name}</p>
+                            {doc.userEmail && <p className="text-xs text-gray-400">{doc.userEmail}</p>}
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {getSpecialityLabel(doc.speciality)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {doc.experience ? `${doc.experience} yrs` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {doc.phone || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {renderStatusBadge(doc.isActive)}
-                      </td>
+                      <td className="px-4 py-3 text-gray-700">{getSpecialityLabel(doc.speciality)}</td>
+                      <td className="px-4 py-3 text-gray-700">{doc.experience ? `${doc.experience} yrs` : '—'}</td>
+                      <td className="px-4 py-3 text-gray-700">{doc.phone || '—'}</td>
+                      <td className="px-4 py-3">{renderStatusBadge(doc.isActive)}</td>
                       <td className="px-4 py-3 text-right space-x-1.5">
                         <button
                           onClick={() => openEditModal(doc)}
-                          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
+                          className="px-2.5 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() =>
-                            handleToggleActive(doc.id, doc.isActive)
-                          }
-                          className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-100"
+                          onClick={() => handleToggleActive(doc.id, doc.isActive)}
+                          className="px-2.5 py-1 text-xs font-medium rounded-md bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-100"
                         >
                           {doc.isActive ? 'Deactivate' : 'Activate'}
                         </button>
@@ -316,7 +299,6 @@ export default function DoctorsPage() {
           </div>
         )}
 
-        {/* Modal */}
         <Modal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
@@ -325,25 +307,21 @@ export default function DoctorsPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Name*
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Name*</label>
                 <input
                   name="name"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   value={form.name}
                   onChange={handleChange}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Email*
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Email*</label>
                 <input
                   name="email"
                   type="email"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   value={form.email}
                   onChange={handleChange}
                   required={!editingDoctorId}
@@ -353,32 +331,26 @@ export default function DoctorsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Phone
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
                 <input
                   name="phone"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   value={form.phone}
                   onChange={handleChange}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Speciality*
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Speciality*</label>
                 <select
                   name="speciality"
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                   value={form.speciality}
                   onChange={handleChange}
                 >
                   <option value="">-- Select Speciality --</option>
                   {SPECIALITIES_ENUM.map((spec) => (
-                    <option key={spec.value} value={spec.value}>
-                      {spec.label}
-                    </option>
+                    <option key={spec.value} value={spec.value}>{spec.label}</option>
                   ))}
                 </select>
               </div>
@@ -386,38 +358,25 @@ export default function DoctorsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Experience (yrs)*
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Experience (yrs)*</label>
                 <input
                   name="experience"
                   type="number"
                   min="0"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   value={form.experience}
                   onChange={handleChange}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Avatar
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-1">Avatar Image</label>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setAvatarFile(file);
-                    setForm((prev) => ({ ...prev, avatar: prev.avatar || '' }));
-                  }}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                 />
-                {form.avatar && !avatarFile && (
-                  <p className="mt-1 text-xs text-gray-400 break-all">
-                    Current: {form.avatar}
-                  </p>
-                )}
               </div>
             </div>
 
@@ -428,7 +387,7 @@ export default function DoctorsPage() {
               <input
                 name="password"
                 type="password"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 value={form.password}
                 onChange={handleChange}
                 required={!editingDoctorId}

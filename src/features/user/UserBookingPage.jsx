@@ -19,10 +19,14 @@ import { ENDPOINTS } from '../../lib/endpoints';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+/** Fix image URL – remove /api */
 const toFullUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${API_BASE_URL}${url}`;
+
+  const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${origin}${cleanPath}`;
 };
 
 const formatPrice = (price) =>
@@ -52,25 +56,6 @@ const to12Hour = (timeStr) => {
   return `${pad(hour)}:${pad(parseInt(minute, 10))} ${ampm}`;
 };
 
-const isSlotPassed = (slotDateStr, slotTimeStr) => {
-  if (!slotDateStr || !slotTimeStr) return false;
-
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-
-  if (slotDateStr < todayStr) return true;
-  if (slotDateStr > todayStr) return false;
-
-  const [hours, minutes] = slotTimeStr.split(':').map(Number);
-  const currentHours = now.getHours();
-  const currentMinutes = now.getMinutes();
-
-  if (hours < currentHours) return true;
-  if (hours === currentHours && minutes <= currentMinutes) return true;
-
-  return false;
-};
-
 const pad2 = (n) => String(n).padStart(2, '0');
 const formatCountdown = (seconds) => {
   const s = Math.max(0, Number(seconds || 0));
@@ -93,6 +78,8 @@ export default function UserBookingPage() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [error, setError] = useState('');
 
+  const [doctorAvatarBroken, setDoctorAvatarBroken] = useState(false);
+
   // payment hold / countdown
   const [hold, setHold] = useState(null);
   const [holdLeftSec, setHoldLeftSec] = useState(0);
@@ -103,7 +90,6 @@ export default function UserBookingPage() {
     [selectedDate]
   );
 
-  // URLs from ENDPOINTS only
   const DOCTOR_URL = useMemo(
     () => ENDPOINTS.PUBLIC.DOCTOR_BY_ID(doctorId),
     [doctorId]
@@ -120,30 +106,29 @@ export default function UserBookingPage() {
     holdTimerRef.current = null;
   }, []);
 
- const startHoldTimer = useCallback(
-  (expiresAtMs, fetchSlotsFn) => {
-    stopHoldTimer();
-    const tick = () => {
-      const left = Math.ceil((expiresAtMs - Date.now()) / 1000);
-      setHoldLeftSec(Math.max(0, left));
-      if (left <= 0) {
-        stopHoldTimer();
-        toast.error('Payment hold expired. Please select slot & book again.', {
-          duration: 5000,
-        });
-        setHold(null);
-        if (fetchSlotsFn) fetchSlotsFn(); // ✅ Safe call
-        return;
-      }
-    };
-    tick();
-    holdTimerRef.current = setInterval(tick, 1000);
-  },
-  [stopHoldTimer] // ✅ Keep only stable deps
-);
+  const startHoldTimer = useCallback(
+    (expiresAtMs, fetchSlotsFn) => {
+      stopHoldTimer();
+      const tick = () => {
+        const left = Math.ceil((expiresAtMs - Date.now()) / 1000);
+        setHoldLeftSec(Math.max(0, left));
+        if (left <= 0) {
+          stopHoldTimer();
+          toast.error('Payment hold expired. Please select slot & book again.', {
+            duration: 5000,
+          });
+          setHold(null);
+          if (fetchSlotsFn) fetchSlotsFn();
+          return;
+        }
+      };
+      tick();
+      holdTimerRef.current = setInterval(tick, 1000);
+    },
+    [stopHoldTimer]
+  );
 
-
-  // 1) Fetch doctor
+  // Fetch doctor
   useEffect(() => {
     if (doctor) return;
     let alive = true;
@@ -169,6 +154,7 @@ export default function UserBookingPage() {
     };
   }, [DOCTOR_URL, doctor]);
 
+  // Fetch slots (uses backend isPassed)
   const fetchSlots = useCallback(async () => {
     if (!doctor || !selectedDateStr) return;
 
@@ -206,23 +192,21 @@ export default function UserBookingPage() {
     fetchSlots();
   }, [fetchSlots]);
 
-  // refresh slots every 30s
+  // Auto‑refresh slots every 30s ONLY when there is an active hold
   useEffect(() => {
-    if (!doctor) return;
+    if (!doctor || !hold) return;
     const id = setInterval(() => {
       fetchSlots();
     }, 30000);
     return () => clearInterval(id);
-  }, [doctor, fetchSlots]);
+  }, [doctor, hold, fetchSlots]);
 
   useEffect(() => () => stopHoldTimer(), [stopHoldTimer]);
 
+  // Use backend isPassed for counts
   const availableSlots = useMemo(
-    () =>
-      slots.filter(
-        (s) => !s.isBooked && !isSlotPassed(selectedDateStr, s.time)
-      ),
-    [slots, selectedDateStr]
+    () => slots.filter((s) => !s.isBooked && !s.isPassed),
+    [slots]
   );
   const freeSlotsCount = useMemo(
     () => availableSlots.filter((s) => s.paymentMode === 'FREE').length,
@@ -233,7 +217,7 @@ export default function UserBookingPage() {
     [availableSlots]
   );
 
-  // 3) Book
+  // Book
   const handleBookNow = async () => {
     if (!selectedSlot) return;
 
@@ -265,22 +249,17 @@ export default function UserBookingPage() {
       });
 
       const data = res.data;
-      console.log('CREATE_BOOKING response:', data);
-
       if (!data?.success) {
         toast.error(data?.error || 'Booking failed');
         return;
       }
 
-      // FREE / OFFLINE flows
       if (!data.isOnline) {
         toast.success(data.message || 'Appointment confirmed');
         navigate('/my-appointments');
         return;
       }
 
-      // ONLINE hold
-      console.log('expiresIn from API:', data.expiresIn);
       const expiresIn =
         typeof data.expiresIn === 'number'
           ? data.expiresIn
@@ -294,10 +273,7 @@ export default function UserBookingPage() {
         return;
       }
 
-      // ✅ must compute expiresAtMs here
       const expiresAtMs = Date.now() + expiresIn * 1000;
-
-      console.log('expiresIn from API:', data.expiresIn, 'computed:', expiresIn);
 
       setHold({
         appointmentId: data.appointmentId,
@@ -309,9 +285,8 @@ export default function UserBookingPage() {
         key: data.key,
         amount: data.amount,
       });
-      startHoldTimer(expiresAtMs, fetchSlots); // ✅ Pass fetchSlots
+      startHoldTimer(expiresAtMs, fetchSlots);
 
-      // STRIPE redirect
       if (data.provider === 'STRIPE') {
         if (!data.url) {
           toast.error('Stripe payment URL missing');
@@ -321,7 +296,6 @@ export default function UserBookingPage() {
         return;
       }
 
-      // RAZORPAY checkout
       if (data.provider === 'RAZORPAY') {
         if (!window.Razorpay) {
           toast.error(
@@ -393,8 +367,6 @@ export default function UserBookingPage() {
       const msg = err?.response?.data?.error;
       const status = err?.response?.status;
 
-      console.error('Booking Error:', err);
-
       if (status === 409) {
         toast.error(msg || 'Slot just got booked. Please pick another.');
         setSlots((prev) =>
@@ -433,7 +405,8 @@ export default function UserBookingPage() {
 
   if (!doctor) return null;
 
-  const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
+  const avatarUrl =
+    !doctorAvatarBroken && doctor.avatar ? toFullUrl(doctor.avatar) : null;
   const doctorInitial = doctor.name ? doctor.name.charAt(0).toUpperCase() : 'D';
 
   return (
@@ -443,29 +416,26 @@ export default function UserBookingPage() {
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">
             <div className="w-28 h-28 mx-auto bg-[#003366] rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-md overflow-hidden text-white relative">
-              {avatarUrl && (
+              {avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={doctor.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
+                    setDoctorAvatarBroken(true);
                     e.currentTarget.style.display = 'none';
-                    const sibling = e.currentTarget.nextSibling;
-                    if (sibling) sibling.style.display = 'block';
                   }}
                 />
+              ) : (
+                <span className="text-4xl font-bold uppercase">
+                  {doctorInitial}
+                </span>
               )}
-              <span
-                className="text-4xl font-bold uppercase absolute"
-                style={{ display: avatarUrl ? 'none' : 'block' }}
-              >
-                {doctorInitial}
-              </span>
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900">{doctor.name}</h2>
             <p className="text-blue-600 font-medium mb-2">
-              {doctor.speciality}
+              {getSpecialityLabel(doctor.speciality)}
             </p>
 
             {doctor.clinic && (
@@ -580,10 +550,7 @@ export default function UserBookingPage() {
                           const isSelected = selectedSlot?.id === slot.id;
                           const isFree = slot.paymentMode === 'FREE';
                           const isBooked = slot.isBooked === true;
-                          const isPassed = isSlotPassed(
-                            selectedDateStr,
-                            slot.time
-                          );
+                          const isPassed = slot.isPassed === true;
                           const isDisabled = isBooked || isPassed;
 
                           return (
@@ -689,4 +656,20 @@ export default function UserBookingPage() {
       </div>
     </UserLayout>
   );
+}
+
+function getSpecialityLabel(speciality) {
+  const labels = {
+    DENTIST: 'Dentist',
+    CARDIOLOGIST: 'Cardiologist',
+    NEUROLOGIST: 'Neurologist',
+    ORTHOPEDIC: 'Orthopedic',
+    GYNECOLOGIST: 'Gynecologist',
+    PEDIATRICIAN: 'Pediatrician',
+    DERMATOLOGIST: 'Dermatologist',
+    OPHTHALMOLOGIST: 'Ophthalmologist',
+    GENERAL_PHYSICIAN: 'General Physician',
+    OTHER: 'Specialist',
+  };
+  return labels[speciality] || speciality || 'Specialist';
 }

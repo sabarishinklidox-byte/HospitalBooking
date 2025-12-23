@@ -1,11 +1,12 @@
+// src/features/admin/ClinicAdminDashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '../../lib/api';
 import ClinicAdminLayout from '../../layouts/ClinicAdminLayout.jsx';
 import Loader from '../../components/Loader.jsx';
 import { ENDPOINTS } from '../../lib/endpoints';
+import toast from 'react-hot-toast';
 
-// 🔹 Animation presets
 const cardAnim = {
   hidden: { opacity: 0, y: 20, scale: 0.96 },
   visible: {
@@ -26,9 +27,10 @@ export default function ClinicAdminDashboard() {
       setLoading(true);
       setError('');
       const res = await api.get(ENDPOINTS.ADMIN.DASHBOARD);
+      console.log('ADMIN DASHBOARD DATA', res.data);
       setStats(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load dashboard');
+      setError(err?.response?.data?.error || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
@@ -47,7 +49,7 @@ export default function ClinicAdminDashboard() {
     <ClinicAdminLayout>
       <div className="w-full px-4 sm:px-8 pb-10">
         <h1
-          className="text-3xl sm:text-4xl font-extrabold mb-8 tracking-tight"
+          className="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight"
           style={{ color: 'var(--color-primary)' }}
         >
           Clinic Admin Dashboard
@@ -59,6 +61,26 @@ export default function ClinicAdminDashboard() {
           <Loader />
         ) : (
           <>
+            {/* SaaS booking link with copy button */}
+            {stats.publicBookingUrl && (
+              <div className="mb-6 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-gray-600">Patient booking link:</span>
+                <code className="px-2 py-1 bg-gray-100 rounded text-xs break-all">
+                  {stats.publicBookingUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(stats.publicBookingUrl);
+                    toast.success('Booking link copied to clipboard');
+                  }}
+                  className="px-3 py-1 text-xs font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
+                >
+                  <span>Copy URL</span>
+                </button>
+              </div>
+            )}
+
             {/* FIRST ROW */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
               <BigCard
@@ -69,14 +91,23 @@ export default function ClinicAdminDashboard() {
                   typeof stats.yesterdayAppointments === 'number' && (
                     <span
                       className={`text-sm font-semibold ${dirClass(
-                        diff(stats.todayAppointments, stats.yesterdayAppointments)
+                        diff(
+                          stats.todayAppointments,
+                          stats.yesterdayAppointments
+                        )
                       )}`}
                     >
                       {arrow(
-                        diff(stats.todayAppointments, stats.yesterdayAppointments)
+                        diff(
+                          stats.todayAppointments,
+                          stats.yesterdayAppointments
+                        )
                       )}{' '}
                       {Math.abs(
-                        diff(stats.todayAppointments, stats.yesterdayAppointments)
+                        diff(
+                          stats.todayAppointments,
+                          stats.yesterdayAppointments
+                        )
                       )}{' '}
                       vs yesterday
                     </span>
@@ -108,7 +139,9 @@ export default function ClinicAdminDashboard() {
                           diff(stats.todayRevenue, stats.yesterdayRevenue)
                         )}`}
                       >
-                        {arrow(diff(stats.todayRevenue, stats.yesterdayRevenue))}{' '}
+                        {arrow(
+                          diff(stats.todayRevenue, stats.yesterdayRevenue)
+                        )}{' '}
                         ₹{Math.abs(
                           diff(stats.todayRevenue, stats.yesterdayRevenue)
                         )}{' '}
@@ -123,14 +156,52 @@ export default function ClinicAdminDashboard() {
               />
             </div>
 
-            {/* SECOND ROW */}
+            {/* SECOND ROW – booking status */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-              <StatCard label="Total Bookings" value={stats.totalBookings || 0} border="border-slate-500" />
-              <StatCard label="Pending" value={stats.totalPending || 0} border="border-yellow-500" />
-              <StatCard label="Confirmed" value={stats.totalConfirmed || 0} border="border-green-500" />
-              <StatCard label="Completed" value={stats.totalCompleted || 0} border="border-blue-500" />
-              <StatCard label="No‑Show" value={stats.totalNoShow || 0} border="border-orange-500" />
-              <StatCard label="Cancelled" value={stats.totalCancelled || 0} border="border-red-500" />
+              <StatCard
+                label="Total Bookings"
+                value={stats.totalBookings || 0}
+                border="border-slate-500"
+              />
+              <StatCard
+                label="Pending"
+                value={stats.totalPending || 0}
+                border="border-yellow-500"
+              />
+              <StatCard
+                label="Confirmed"
+                value={stats.totalConfirmed || 0}
+                border="border-green-500"
+              />
+              <StatCard
+                label="Completed"
+                value={stats.totalCompleted || 0}
+                border="border-blue-500"
+              />
+              <StatCard
+                label="No‑Show"
+                value={stats.totalNoShow || 0}
+                border="border-orange-500"
+              />
+              <StatCard
+                label="Cancelled"
+                value={stats.totalCancelled || 0}
+                border="border-red-500"
+              />
+            </div>
+
+            {/* THIRD ROW – slot utilisation */}
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <StatCard
+                label="Open Slots Today"
+                value={stats.openSlotsToday || 0}
+                border="border-emerald-500"
+              />
+              <StatCard
+                label="Expired Unbooked Slots"
+                value={stats.expiredUnbookedSlotsToday || 0}
+                border="border-rose-500"
+              />
             </div>
           </>
         )}
@@ -139,7 +210,6 @@ export default function ClinicAdminDashboard() {
   );
 }
 
-// 🔹 BIG KPI CARD
 function BigCard({ title, value, border, footer }) {
   return (
     <motion.div
@@ -163,7 +233,6 @@ function BigCard({ title, value, border, footer }) {
   );
 }
 
-// 🔹 SMALL STAT CARD
 function StatCard({ label, value, border }) {
   return (
     <motion.div

@@ -144,8 +144,6 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {clinics.map((clinic, idx) => {
                 const banner = toFullUrl(clinic.banner) || DEFAULT_BANNER;
-
-                // logo: use uploaded if present and valid, else default
                 const logoSrc = toFullUrl(clinic.logo) || DEFAULT_LOGO;
 
                 const ratingRaw = clinic.googleRating;
@@ -163,6 +161,11 @@ export default function LandingPage() {
                 const reviewUrl =
                   clinic.googleRatingUrl || clinic.googleMapsUrl || null;
 
+                // description from Prisma `details`
+                const description =
+                  clinic.details ||
+                  'This clinic provides multi‑specialty outpatient care, diagnostics, and appointment‑based consultations.';
+
                 return (
                   <motion.button
                     key={clinic.id}
@@ -170,10 +173,27 @@ export default function LandingPage() {
                     variants={fadeUp}
                     initial="hidden"
                     animate="visible"
+                    whileHover={{ y: -4, scale: 1.01 }}
                     onClick={() => navigate(`/clinics/${clinic.id}`)}
-                    className="relative group text-left rounded-2xl overflow-hidden border border-gray-100 shadow-lg bg-white transition-all hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-[#003366]/40"
-                    whileHover={{ y: -4 }}
+                    className="relative group text-left rounded-2xl overflow-hidden
+                               border border-cyan-100/70 bg-cyan-50/70
+                               shadow-[0_10px_25px_rgba(8,145,178,0.12)]
+                               backdrop-blur-md transition-all duration-300
+                               hover:shadow-[0_18px_40px_rgba(8,145,178,0.28)]
+                               focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                   >
+                    {/* soft animated glow behind card, loops */}
+                    <motion.div
+                      className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-tr from-cyan-200/0 via-cyan-200/25 to-cyan-300/0"
+                      animate={{ opacity: [0, 1, 0] }}
+                      transition={{
+                        duration: 4,
+                        repeat: Infinity,
+                        repeatDelay: 2,
+                        ease: 'easeInOut',
+                      }}
+                    />
+
                     {/* Banner */}
                     <div className="h-32 w-full overflow-hidden relative">
                       <img
@@ -181,12 +201,12 @@ export default function LandingPage() {
                         className="w-full h-full object-cover"
                         alt={clinic.name}
                       />
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/35 transition-colors" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-black/0 transition-colors group-hover:from-black/55" />
                     </div>
 
                     {/* Card body */}
-                    <div className="p-6 pt-10 relative">
-                      {/* Logo – uploaded if ok, else default */}
+                    <div className="relative p-6 pt-10">
+                      {/* Logo */}
                       <div className="absolute -top-10 left-6 p-1 bg-white rounded-xl shadow-lg">
                         <img
                           src={logoSrc}
@@ -201,10 +221,10 @@ export default function LandingPage() {
                       {/* Name + rating row */}
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-extrabold text-xl text-gray-900">
+                          <h3 className="font-extrabold text-xl text-slate-900">
                             {clinic.name}
                           </h3>
-                          <p className="text-xs uppercase tracking-wide text-gray-400 mt-0.5">
+                          <p className="text-xs uppercase tracking-wide text-slate-400 mt-0.5">
                             {clinic.city}
                           </p>
                         </div>
@@ -213,10 +233,10 @@ export default function LandingPage() {
                           !Number.isNaN(rating) &&
                           rating > 0 && (
                             <div className="inline-flex flex-col items-end gap-1">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-[11px] font-semibold text-yellow-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 text-[11px] font-semibold text-amber-800">
                                 ⭐ {rating.toFixed(1)} / 5
                               </span>
-                              <span className="text-[11px] text-gray-400">
+                              <span className="text-[11px] text-slate-400">
                                 {totalReviews &&
                                 !Number.isNaN(totalReviews) &&
                                 totalReviews > 0
@@ -228,14 +248,19 @@ export default function LandingPage() {
                       </div>
 
                       {/* Address */}
-                      <p className="text-sm text-gray-500 mt-3 line-clamp-2">
+                      <p className="text-sm text-slate-600 mt-3 line-clamp-2">
                         {clinic.address}, {clinic.city}
                         {clinic.pincode ? ` - ${clinic.pincode}` : ''}
                       </p>
 
+                      {/* NEW: short description */}
+                      <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                        {description}
+                      </p>
+
                       {/* Phone number */}
                       {clinic.phone && clinic.phone !== '0000000000' && (
-                        <p className="flex items-center gap-2 mt-2 text-sm text-gray-600">
+                        <p className="flex items-center gap-2 mt-2 text-sm text-slate-600">
                           <svg
                             className="w-4 h-4 flex-shrink-0"
                             fill="none"
@@ -251,7 +276,7 @@ export default function LandingPage() {
                           </svg>
                           <a
                             href={`tel:${clinic.phone}`}
-                            className="font-semibold text-blue-600 hover:underline"
+                            className="font-semibold text-cyan-700 hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {clinic.phone}
@@ -261,7 +286,7 @@ export default function LandingPage() {
 
                       {/* Timings */}
                       {clinic.timings && (
-                        <p className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                        <p className="flex items-center gap-2 mt-2 text-xs text-slate-500">
                           <svg
                             className="w-3.5 h-3.5 flex-shrink-0"
                             fill="currentColor"
@@ -283,7 +308,7 @@ export default function LandingPage() {
                           href={reviewUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline underline-offset-2"
+                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900 hover:underline underline-offset-2"
                           onClick={(e) => e.stopPropagation()}
                         >
                           Write a Google review
@@ -292,11 +317,11 @@ export default function LandingPage() {
                       )}
 
                       {/* CTA row */}
-                      <div className="mt-5 pt-4 border-t flex items-center justify-between text-sm">
+                      <div className="mt-5 pt-4 border-t border-cyan-100/80 flex items-center justify-between text-sm">
                         <span className="text-[#003366] font-semibold flex items-center gap-2">
                           View Specialists <span>→</span>
                         </span>
-                        <span className="text-[11px] text-gray-400">
+                        <span className="text-[11px] text-slate-400">
                           Tap card to see doctors
                         </span>
                       </div>

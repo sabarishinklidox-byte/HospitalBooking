@@ -1,4 +1,4 @@
-// src/features/user/ClinicDetailPage.jsx
+// src/features/user/ClinicDetailPage.jsx - FIXED IMAGE URLS
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -11,10 +11,18 @@ const PRIMARY_COLOR = '#0056b3';
 const ACCENT_COLOR = '#00bcd4';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+/**
+ * ✅ FIXED: Removes /api from uploads path
+ * /uploads/abc.jpg → http://localhost:5000/uploads/abc.jpg (NOT /api/uploads)
+ */
 const toFullUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${API_BASE_URL}${url}`;
+  
+  // Remove /api from base URL for static files
+  const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${origin}${cleanPath}`;
 };
 
 export default function ClinicDetailPage() {
@@ -22,6 +30,8 @@ export default function ClinicDetailPage() {
   const [clinic, setClinic] = useState(null);
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [logoBroken, setLogoBroken] = useState(false);
+  const [brokenAvatars, setBrokenAvatars] = useState({});
 
   useEffect(() => {
     const fetchClinicAndDoctors = async () => {
@@ -77,22 +87,20 @@ export default function ClinicDetailPage() {
     );
   }
 
-  const logo = toFullUrl(clinic.logo);
+  const logo = !logoBroken ? toFullUrl(clinic.logo) : null;
   const ratingRaw = clinic.googleRating;
-  const rating =
-    ratingRaw != null && ratingRaw !== '' ? Number(ratingRaw) : null;
+  const rating = ratingRaw != null && ratingRaw !== '' ? Number(ratingRaw) : null;
   const totalReviewsRaw = clinic.googleTotalReviews;
-  const totalReviews =
-    totalReviewsRaw != null && totalReviewsRaw !== ''
-      ? Number(totalReviewsRaw)
-      : null;
+  const totalReviews = totalReviewsRaw != null && totalReviewsRaw !== ''
+    ? Number(totalReviewsRaw)
+    : null;
 
   return (
     <UserLayout>
       <div className="max-w-7xl mx-auto px-4 py-10 space-y-8">
         {/* Clinic header card */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 md:p-7 flex flex-col md:flex-row md:items-center gap-6">
-          {/* Logo */}
+          {/* Logo - FIXED */}
           <div className="flex-shrink-0">
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden border-4 border-white shadow-md">
               {logo ? (
@@ -100,6 +108,7 @@ export default function ClinicDetailPage() {
                   src={logo}
                   alt={clinic.name}
                   className="w-full h-full object-contain"
+                  onError={() => setLogoBroken(true)}
                 />
               ) : (
                 <span className="text-3xl md:text-4xl">🏥</span>
@@ -109,9 +118,7 @@ export default function ClinicDetailPage() {
 
           {/* Text info */}
           <div className="flex-1 min-w-0">
-            <p className="text-xs uppercase tracking-wide text-gray-400">
-              Clinic
-            </p>
+            <p className="text-xs uppercase tracking-wide text-gray-400">Clinic</p>
             <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
               {clinic.name}
             </h1>
@@ -127,12 +134,7 @@ export default function ClinicDetailPage() {
                   href={`tel:${clinic.phone}`}
                   className="inline-flex items-center gap-1 text-blue-600 font-semibold"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -146,11 +148,7 @@ export default function ClinicDetailPage() {
 
               {clinic.timings && (
                 <span className="inline-flex items-center gap-1 text-gray-500 text-xs px-3 py-1 rounded-full bg-gray-50 border border-gray-100">
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
@@ -164,13 +162,9 @@ export default function ClinicDetailPage() {
               {rating !== null && !Number.isNaN(rating) && rating > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full bg-yellow-50 border border-yellow-100 text-yellow-800">
                   ⭐ {rating.toFixed(1)} / 5
-                  {totalReviews &&
-                    !Number.isNaN(totalReviews) &&
-                    totalReviews > 0 && (
-                      <span className="text-[10px] text-gray-500">
-                        ({totalReviews} reviews)
-                      </span>
-                    )}
+                  {totalReviews && !Number.isNaN(totalReviews) && totalReviews > 0 && (
+                    <span className="text-[10px] text-gray-500">({totalReviews} reviews)</span>
+                  )}
                 </span>
               )}
             </div>
@@ -189,7 +183,7 @@ export default function ClinicDetailPage() {
           </div>
         </div>
 
-        {/* Doctors grid */}
+        {/* Doctors grid - FIXED IMAGES */}
         {doctors.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
             <span className="text-5xl block mb-4">🩺</span>
@@ -200,9 +194,11 @@ export default function ClinicDetailPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
             {doctors.map((doctor, index) => {
-              const avatar = doctor.avatar ? toFullUrl(doctor.avatar) : null;
-              const ratingValue =
-                typeof doctor.rating === 'number' ? doctor.rating : null;
+              // ✅ FIXED: Use corrected toFullUrl + error handling
+              const avatar = doctor.avatar && !brokenAvatars[doctor.id] 
+                ? toFullUrl(doctor.avatar) 
+                : null;
+              const ratingValue = typeof doctor.rating === 'number' ? doctor.rating : null;
 
               return (
                 <motion.div
@@ -213,13 +209,17 @@ export default function ClinicDetailPage() {
                   transition={{ delay: 0.04 * index, duration: 0.25 }}
                   className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 flex flex-col items-center text-center"
                 >
-                  {/* Avatar */}
+                  {/* Avatar - FIXED */}
                   <div className="w-24 h-24 rounded-full bg-blue-50 flex items-center justify-center mb-4 overflow-hidden border-4 border-white shadow">
                     {avatar ? (
                       <img
                         src={avatar}
                         className="w-full h-full object-cover"
                         alt={doctor.name}
+                        onError={(e) => {
+                          setBrokenAvatars((prev) => ({ ...prev, [doctor.id]: true }));
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     ) : (
                       <span className="text-3xl font-extrabold text-[#003366] uppercase">
@@ -236,7 +236,7 @@ export default function ClinicDetailPage() {
                     className="text-xs text-white font-semibold px-3 py-1 rounded-full mb-3 shadow-sm"
                     style={{ backgroundColor: ACCENT_COLOR }}
                   >
-                    {doctor.speciality}
+                    {getSpecialityLabel(doctor.speciality)}
                   </p>
 
                   {/* Stats */}
@@ -252,7 +252,7 @@ export default function ClinicDetailPage() {
                       <p className="uppercase font-semibold">Rating</p>
                       <div className="flex items-center justify-center gap-1 text-yellow-500 font-extrabold text-sm">
                         <span>★</span>
-                        <span>{ratingValue ?? 'New'}</span>
+                        <span>{ratingValue ? ratingValue.toFixed(1) : 'New'}</span>
                       </div>
                     </div>
                   </div>
@@ -273,4 +273,21 @@ export default function ClinicDetailPage() {
       </div>
     </UserLayout>
   );
+}
+
+// Speciality labels
+function getSpecialityLabel(speciality) {
+  const labels = {
+    DENTIST: 'Dentist',
+    CARDIOLOGIST: 'Cardiologist',
+    NEUROLOGIST: 'Neurologist',
+    ORTHOPEDIC: 'Orthopedic',
+    GYNECOLOGIST: 'Gynecologist',
+    PEDIATRICIAN: 'Pediatrician',
+    DERMATOLOGIST: 'Dermatologist',
+    OPHTHALMOLOGIST: 'Ophthalmologist',
+    GENERAL_PHYSICIAN: 'General Physician',
+    OTHER: 'Specialist',
+  };
+  return labels[speciality] || speciality || 'Specialist';
 }
