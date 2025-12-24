@@ -6,6 +6,13 @@ import { ENDPOINTS } from "../../lib/endpoints";
 
 const PRIMARY_COLOR = "#0b3b5e";
 
+// 🔥 Local date (no UTC shift)
+const getLocalDateString = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+};
+
 export default function RescheduleAppointmentModal({
   open,
   onClose,
@@ -21,7 +28,11 @@ export default function RescheduleAppointmentModal({
   const [deleteOldSlot, setDeleteOldSlot] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchSlots = async () => {
+  // 🔥 window start for infinite navigation
+  const [fromDate, setFromDate] = useState(getLocalDateString());
+  const windowSize = 7; // 7‑day chunks but infinite via navigation
+
+  const fetchSlots = async (baseFrom = fromDate) => {
     if (!appointment?.doctorId || !appointment?.id) return;
 
     try {
@@ -29,18 +40,20 @@ export default function RescheduleAppointmentModal({
       setError("");
 
       const res = await api.get(
-        ENDPOINTS.ADMIN.DOCTOR_SLOTS(appointment.doctorId),
+        ENDPOINTS.ADMIN.DOCTOR_SLOTS(appointment.doctorId), // -> getDoctorSlotsWindow
         {
           params: {
-            from: new Date().toISOString().slice(0, 10),
-            days: 7,
-            excludeAppointmentId: appointment.id, // ✅ important
+            from: baseFrom,          // backend labels Today/Tomorrow vs baseFrom
+            days: windowSize,
+            excludeAppointmentId: appointment.id,
           },
         }
       );
 
-      const days = res.data || [];
+
+      const days = Array.isArray(res.data) ? res.data : [];
       setSlotsByDay(days);
+      setSelectedSlot(null);
       setSelectedDate(days[0]?.date ?? null);
     } catch (err) {
       console.error("Failed to load slots", err);
@@ -60,11 +73,22 @@ export default function RescheduleAppointmentModal({
     setDeleteOldSlot(false);
     setError("");
 
-    fetchSlots();
+    const todayStr = getLocalDateString();
+    setFromDate(todayStr);
+    fetchSlots(todayStr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appointment?.id, appointment?.doctorId]);
 
   if (!open || !appointment) return null;
+
+  // 🔥 move 7‑day window forward/backward (infinite reschedule)
+  const shiftWindow = (deltaDays) => {
+    const d = new Date(fromDate);
+    d.setDate(d.getDate() + deltaDays);
+    const newFrom = d.toISOString().slice(0, 10);
+    setFromDate(newFrom);
+    fetchSlots(newFrom);
+  };
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedSlot) {
@@ -72,7 +96,6 @@ export default function RescheduleAppointmentModal({
       return;
     }
 
-    // extra guard: don’t allow booked slot submission
     if (selectedSlot?.isBooked) {
       setError("This slot is already booked. Please choose another slot.");
       return;
@@ -96,7 +119,9 @@ export default function RescheduleAppointmentModal({
       onClose();
     } catch (err) {
       console.error("Reschedule failed", err);
-      setError(err?.response?.data?.error || "Failed to reschedule appointment.");
+      setError(
+        err?.response?.data?.error || "Failed to reschedule appointment."
+      );
     } finally {
       setSaving(false);
     }
@@ -109,6 +134,7 @@ export default function RescheduleAppointmentModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-4 overflow-hidden">
+        {/* Header */}
         <div
           className="px-6 py-4 flex justify-between items-center"
           style={{ backgroundColor: PRIMARY_COLOR }}
@@ -118,7 +144,7 @@ export default function RescheduleAppointmentModal({
               Reschedule Appointment
             </h2>
             <p className="text-xs text-blue-100">
-              Choose a new slot for this patient.
+              Choose a new slot (navigate weeks for future dates).
             </p>
           </div>
           <button
@@ -129,7 +155,9 @@ export default function RescheduleAppointmentModal({
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+          {/* Doctor info */}
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-sm font-bold text-[#0b3b5e]">
               {appointment.doctorName?.charAt(0)}
@@ -153,6 +181,26 @@ export default function RescheduleAppointmentModal({
             </div>
           )}
 
+          {/* Week navigator */}
+          <div className="flex items-center justify-between mb-2 text-xs text-gray-500">
+            <button
+              type="button"
+              onClick={() => shiftWindow(-windowSize)}
+              className="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+            >
+              ‹ Previous {windowSize} days
+            </button>
+            <span>Starting from {fromDate}</span>
+            <button
+              type="button"
+              onClick={() => shiftWindow(windowSize)}
+              className="px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+            >
+              Next {windowSize} days ›
+            </button>
+          </div>
+
+          {/* Day tabs */}
           <div className="border-b border-gray-200 overflow-x-auto">
             <div className="flex gap-2 min-w-max">
               {slotsByDay.map((day) => (
@@ -178,6 +226,7 @@ export default function RescheduleAppointmentModal({
             </div>
           </div>
 
+          {/* Slots */}
           {loadingSlots ? (
             <div className="flex justify-center py-10">
               <Loader />
@@ -197,7 +246,7 @@ export default function RescheduleAppointmentModal({
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {periodSlots.map((slot) => {
-                        const booked = !!slot.isBooked; // ✅ backend must send
+                        const booked = !!slot.isBooked;
                         const isSelected =
                           selectedSlot?.startTime === slot.startTime &&
                           selectedDate === dayObj.date;
@@ -237,6 +286,7 @@ export default function RescheduleAppointmentModal({
             </div>
           )}
 
+          {/* Block old slot */}
           <div className="flex items-center gap-2 pt-1">
             <input
               id="deleteOldSlot"
@@ -253,6 +303,7 @@ export default function RescheduleAppointmentModal({
             </label>
           </div>
 
+          {/* Admin note */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
               Admin note (optional)
@@ -266,6 +317,7 @@ export default function RescheduleAppointmentModal({
           </div>
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t flex justify-end gap-3 bg-gray-50">
           <button
             type="button"

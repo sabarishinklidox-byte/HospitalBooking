@@ -6,15 +6,14 @@ import Modal from "../../components/Modal.jsx";
 import BulkSlotCreator from "./BulkSlotCreator";
 import toast from "react-hot-toast";
 import { ENDPOINTS } from "../../lib/endpoints";
-import DatePicker from "react-datepicker"; // ✅ Use DatePicker
+import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 const today = new Date().toISOString().split("T")[0];
 
-// Helper: Parse 24h string "HH:MM" to Date object
 const parseTime = (timeStr) => {
   if (!timeStr) return null;
-  const [h, m] = timeStr.split(':');
+  const [h, m] = timeStr.split(":");
   const date = new Date();
   date.setHours(Number(h));
   date.setMinutes(Number(m));
@@ -22,11 +21,10 @@ const parseTime = (timeStr) => {
   return date;
 };
 
-// Helper: Format Date object to "HH:MM" (24h) string
 const formatTime = (date) => {
   if (!date) return "";
-  const h = date.getHours().toString().padStart(2, '0');
-  const m = date.getMinutes().toString().padStart(2, '0');
+  const h = date.getHours().toString().padStart(2, "0");
+  const m = date.getMinutes().toString().padStart(2, "0");
   return `${h}:${m}`;
 };
 
@@ -39,6 +37,16 @@ export default function SlotsPage() {
   const [doctorId, setDoctorId] = useState("");
   const [selectedDate, setSelectedDate] = useState(today);
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
+
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState(null);
@@ -47,11 +55,11 @@ export default function SlotsPage() {
   const [form, setForm] = useState({
     doctorId: "",
     date: today,
-    time: "", // Stores "HH:MM" (24h) for backend
+    time: "",
     duration: "30",
     price: "500",
     paymentMode: "ONLINE",
-    kind: "APPOINTMENT", 
+    kind: "APPOINTMENT",
   });
 
   const fetchDoctors = async () => {
@@ -67,17 +75,35 @@ export default function SlotsPage() {
     }
   };
 
-  const fetchSlots = async () => {
+  const fetchSlots = async (opts) => {
+    const targetPage = opts?.page ?? page;
+
     if (!doctorId || !selectedDate) {
       setSlots([]);
+      setPagination((prev) => ({ ...prev, total: 0, totalPages: 1 }));
       return;
     }
     setLoading(true);
     try {
       const res = await api.get(ENDPOINTS.ADMIN.SLOTS, {
-        params: { doctorId, date: selectedDate },
+        params: { doctorId, date: selectedDate, page: targetPage, limit },
       });
-      setSlots(res.data || []);
+
+      const data = Array.isArray(res.data)
+        ? res.data
+        : res.data?.data || [];
+
+      const pag = res.data?.pagination || {
+        page: targetPage,
+        limit,
+        total: data.length,
+        totalPages: 1,
+      };
+
+
+      setSlots(data);
+      setPagination(pag);
+      setPage(pag.page);
     } catch {
       toast.error("Failed to load slots");
     } finally {
@@ -90,8 +116,10 @@ export default function SlotsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // reset to page 1 when filters change
   useEffect(() => {
-    fetchSlots();
+    setPage(1);
+    fetchSlots({ page: 1 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doctorId, selectedDate]);
 
@@ -100,7 +128,7 @@ export default function SlotsPage() {
     setEditingSlotId(null);
     setForm({
       doctorId,
-      date: selectedDate, // Pre-fill with selected filter date
+      date: selectedDate,
       time: "",
       duration: "30",
       price: "500",
@@ -110,7 +138,6 @@ export default function SlotsPage() {
     setModalOpen(true);
   };
 
-  // Open edit modal
   const handleEditSlot = (slot) => {
     const kind = slot.kind || "APPOINTMENT";
     const paymentMode = kind === "BREAK" ? "FREE" : slot.paymentMode || "ONLINE";
@@ -129,28 +156,24 @@ export default function SlotsPage() {
     setModalOpen(true);
   };
 
-  // Create / update
   const handleCreateOrUpdateSlot = async (e) => {
     e.preventDefault();
 
-    // ✅ VALIDATION: Block Past Time
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
-    
-    // If selected date is in the past
+
     if (form.date < todayStr) {
-        return toast.error("Cannot create slots for past dates.");
+      return toast.error("Cannot create slots for past dates.");
     }
 
-    // If selected date is TODAY, check time
     if (form.date === todayStr && form.time) {
-        const [h, m] = form.time.split(':').map(Number);
-        const currentH = now.getHours();
-        const currentM = now.getMinutes();
-        
-        if (h < currentH || (h === currentH && m <= currentM)) {
-            return toast.error("Cannot create slots for past time.");
-        }
+      const [h, m] = form.time.split(":").map(Number);
+      const currentH = now.getHours();
+      const currentM = now.getMinutes();
+
+      if (h < currentH || (h === currentH && m <= currentM)) {
+        return toast.error("Cannot create slots for past time.");
+      }
     }
 
     const isBreak = form.kind === "BREAK";
@@ -170,22 +193,23 @@ export default function SlotsPage() {
       loading: editingSlotId ? "Updating slot..." : "Creating slot...",
       success: () => {
         setModalOpen(false);
-        fetchSlots();
+        fetchSlots({ page }); // stay on same page
         return `Slot ${editingSlotId ? "updated" : "created"} successfully!`;
       },
       error: (err) => err.response?.data?.error || "Failed to save slot",
     });
   };
 
-  // Delete
   const handleDeleteSlot = async (id) => {
-    if (!window.confirm("Are you sure you want to permanently delete this slot?")) return;
+    if (!window.confirm("Are you sure you want to permanently delete this slot?"))
+      return;
 
     try {
       await toast.promise(api.delete(ENDPOINTS.ADMIN.SLOT_BY_ID(id)), {
         loading: "Deleting slot...",
         success: () => {
-          fetchSlots();
+          // refetch current page (if last item was removed, backend should clamp page)
+          fetchSlots({ page });
           return "Slot deleted.";
         },
         error: (err) => err.response?.data?.error || "Failed to delete slot.",
@@ -197,26 +221,27 @@ export default function SlotsPage() {
   };
 
   const isBreak = form.kind === "BREAK";
-  
-  // Helper to filter passed times in DatePicker
+
   const filterPassedTime = (time) => {
     const selectedDateStr = form.date;
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
 
-    // If date is in future, all times allowed
     if (selectedDateStr > todayStr) return true;
-
-    // If date is past, disable all (though we block past dates too)
     if (selectedDateStr < todayStr) return false;
 
-    // If TODAY, filter times
     const currentDate = new Date(time);
     const selectedDateWithTime = new Date();
     selectedDateWithTime.setHours(currentDate.getHours());
     selectedDateWithTime.setMinutes(currentDate.getMinutes());
 
     return selectedDateWithTime > now;
+  };
+
+  const goToPage = (p) => {
+    if (p < 1 || p > pagination.totalPages || p === page) return;
+    setPage(p);
+    fetchSlots({ page: p });
   };
 
   return (
@@ -227,13 +252,13 @@ export default function SlotsPage() {
             <span>🗓️</span> Manage Slots
           </h1>
           <p className="text-gray-500 mt-2 ml-1">
-            Create and manage individual or bulk appointment slots for your doctors.
+            Create and manage individual or bulk appointment slots for your
+            doctors.
           </p>
         </div>
 
-        <BulkSlotCreator doctors={doctors} onSuccess={fetchSlots} />
+        <BulkSlotCreator doctors={doctors} onSuccess={() => fetchSlots({ page })} />
 
-        {/* Filters & Results */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-gray-100">
             <div>
@@ -272,10 +297,10 @@ export default function SlotsPage() {
             </div>
           </div>
 
-          {/* Slots list */}
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">
-              Available Slots ({slots.length})
+              Slots ({slots.length}
+              {pagination.total ? ` / ${pagination.total}` : ""})
             </h2>
             <button
               onClick={openCreateModal}
@@ -298,81 +323,149 @@ export default function SlotsPage() {
             </div>
           ) : slots.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-dashed border-2 border-gray-200">
-              <p className="font-medium text-gray-600">No slots found for this day.</p>
+              <p className="font-medium text-gray-600">
+                No slots found for this day.
+              </p>
               <p className="text-sm text-gray-400 mt-1">
-                Use the "Add Single Slot" or "Bulk Create" buttons to generate them.
+                Use the "Add Single Slot" or "Bulk Create" buttons to generate
+                them.
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100 text-gray-600 uppercase text-xs font-bold">
-                  <tr>
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">Duration</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Payment Mode</th>
-                    <th className="px-4 py-3">Price</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {slots.map((slot) => (
-                    <tr key={slot.id} className="hover:bg-blue-50/50">
-                      <td className="px-4 py-3 font-mono font-bold text-gray-800">
-                        {/* Show 12h format in table too */}
-                        {new Date(`1970-01-01T${slot.time}`).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{slot.duration} mins</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.kind === "BREAK" ? "bg-gray-200 text-gray-800" : "bg-indigo-100 text-indigo-800"
-                        }`}>
-                          {slot.kind === "BREAK" ? "Break / Lunch" : "Appointment"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            slot.paymentMode === "FREE" ? "bg-green-100 text-green-800"
-                            : slot.paymentMode === "ONLINE" ? "bg-blue-100 text-blue-800"
-                            : "bg-orange-100 text-orange-800"
-                        }`}>
-                          {slot.paymentMode === "ONLINE" ? "Online Only"
-                           : slot.paymentMode === "OFFLINE" ? "Pay at Clinic"
-                           : "Free"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-green-700">
-                        {slot.paymentMode === "FREE" ? "Free" : `₹${slot.price}`}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          slot.isBooked ? "bg-red-100 text-red-800" : "bg-cyan-100 text-cyan-800"
-                        }`}>
-                          {slot.isBooked ? "Booked" : "Available"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        <button
-                          onClick={() => handleEditSlot(slot)}
-                          className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md font-semibold"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSlot(slot.id)}
-                          disabled={slot.isBooked}
-                          className="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          Delete
-                        </button>
-                      </td>
+            <>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-600 uppercase text-xs font-bold">
+                    <tr>
+                      <th className="px-4 py-3">Time</th>
+                      <th className="px-4 py-3">Duration</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Payment Mode</th>
+                      <th className="px-4 py-3">Price</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {slots.map((slot) => (
+                      <tr key={slot.id} className="hover:bg-blue-50/50">
+                        <td className="px-4 py-3 font-mono font-bold text-gray-800">
+                          {new Date(
+                            `1970-01-01T${slot.time}`
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {slot.duration} mins
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              slot.kind === "BREAK"
+                                ? "bg-gray-200 text-gray-800"
+                                : "bg-indigo-100 text-indigo-800"
+                            }`}
+                          >
+                            {slot.kind === "BREAK"
+                              ? "Break / Lunch"
+                              : "Appointment"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              slot.paymentMode === "FREE"
+                                ? "bg-green-100 text-green-800"
+                                : slot.paymentMode === "ONLINE"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-orange-100 text-orange-800"
+                            }`}
+                          >
+                            {slot.paymentMode === "ONLINE"
+                              ? "Online Only"
+                              : slot.paymentMode === "OFFLINE"
+                              ? "Pay at Clinic"
+                              : "Free"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-green-700">
+                          {slot.paymentMode === "FREE"
+                            ? "Free"
+                            : `₹${slot.price}`}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              slot.isBooked
+                                ? "bg-red-100 text-red-800"
+                                : "bg-cyan-100 text-cyan-800"
+                            }`}
+                          >
+                            {slot.isBooked ? "Booked" : "Available"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right space-x-2">
+                          <button
+                            onClick={() => handleEditSlot(slot)}
+                            className="text-xs px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md font-semibold"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSlot(slot.id)}
+                            disabled={slot.isBooked}
+                            className="text-xs px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination controls */}
+              {pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 text-xs sm:text-sm">
+                  <div className="text-gray-500">
+                    Page{" "}
+                    <span className="font-semibold">{pagination.page}</span> of{" "}
+                    <span className="font-semibold">
+                      {pagination.totalPages}
+                    </span>
+                    {pagination.total > 0 && (
+                      <>
+                        {" "}
+                        · Total{" "}
+                        <span className="font-semibold">
+                          {pagination.total}
+                        </span>{" "}
+                        slots
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => goToPage(pagination.page - 1)}
+                      disabled={pagination.page <= 1}
+                      className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-40"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => goToPage(pagination.page + 1)}
+                      disabled={pagination.page >= pagination.totalPages}
+                      className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -384,37 +477,42 @@ export default function SlotsPage() {
         title={editingSlotId ? "Edit Slot" : "Create New Slot"}
       >
         <form onSubmit={handleCreateOrUpdateSlot} className="space-y-4 p-1">
-          {/* ✅ DATE PICKER (Standard HTML Input for Date) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date
+            </label>
             <input
-                type="date"
-                className="input w-full"
-                value={form.date}
-                min={today} // HTML5 min attribute block past dates
-                onChange={(e) => setForm(prev => ({ ...prev, date: e.target.value }))}
-                required
+              type="date"
+              className="input w-full"
+              value={form.date}
+              min={today}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, date: e.target.value }))
+              }
+              required
             />
           </div>
 
-          {/* ✅ TIME PICKER (12h format with DatePicker) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Time (Start)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Time (Start)
+            </label>
             <DatePicker
-                selected={parseTime(form.time)}
-                onChange={(date) => setForm(prev => ({ ...prev, time: formatTime(date) }))}
-                showTimeSelect
-                showTimeSelectOnly
-                timeIntervals={15}
-                timeCaption="Time"
-                dateFormat="h:mm aa"
-                placeholderText="Select Time"
-                filterTime={filterPassedTime} // ✅ Block past times
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-                required
+              selected={parseTime(form.time)}
+              onChange={(date) =>
+                setForm((prev) => ({ ...prev, time: formatTime(date) }))
+              }
+              showTimeSelect
+              showTimeSelectOnly
+              timeIntervals={15}
+              timeCaption="Time"
+              dateFormat="h:mm aa"
+              placeholderText="Select Time"
+              filterTime={filterPassedTime}
+              className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+              required
             />
-             {/* Fallback hidden input for required validation if DatePicker fails */}
-             <input type="hidden" value={form.time} required />
+            <input type="hidden" value={form.time} required />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -427,28 +525,35 @@ export default function SlotsPage() {
                 min="10"
                 className="input w-full"
                 value={form.duration}
-                onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, duration: e.target.value }))
+                }
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Price (₹)
+              </label>
               <input
                 type="number"
                 min="0"
                 className="input w-full"
                 value={isBreak ? "0" : form.price}
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, price: e.target.value }))
+                }
                 disabled={isBreak || form.paymentMode === "FREE"}
                 required={!isBreak && form.paymentMode !== "FREE"}
               />
             </div>
           </div>
 
-          {/* Slot type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Slot Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Slot Type
+            </label>
             <select
               className="input w-full bg-white"
               value={form.kind}
@@ -457,7 +562,9 @@ export default function SlotsPage() {
                 setForm((prev) => ({
                   ...prev,
                   kind,
-                  ...(kind === "BREAK" ? { paymentMode: "FREE", price: "0" } : {}),
+                  ...(kind === "BREAK"
+                    ? { paymentMode: "FREE", price: "0" }
+                    : {}),
                 }));
               }}
             >
@@ -466,10 +573,11 @@ export default function SlotsPage() {
             </select>
           </div>
 
-          {/* Payment mode (hidden for BREAK) */}
           {!isBreak && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Payment Mode
+              </label>
               <select
                 className="input w-full bg-white"
                 value={form.paymentMode}

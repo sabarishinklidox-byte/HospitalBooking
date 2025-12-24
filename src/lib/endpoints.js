@@ -44,6 +44,9 @@ PAYMENT: {
   DOCTOR_TOGGLE_ACTIVE: (id) => `/admin/doctors/${id}/toggle`,
 
   SLOTS: '/admin/slots',
+  MANAGE: '/admin/slots/manage',
+      BLOCK: (slotId) => `/admin/slots/${slotId}/block`,
+      UNBLOCK: (slotId) => `/admin/slots/${slotId}/unblock`,
   SLOTS_BULK: '/admin/slots/bulk',
   SLOT_BY_ID: (id) => `/admin/slots/${id}`,
 

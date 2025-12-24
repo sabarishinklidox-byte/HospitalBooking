@@ -27,7 +27,7 @@ export default function ClinicAdminDashboard() {
       setLoading(true);
       setError('');
       const res = await api.get(ENDPOINTS.ADMIN.DASHBOARD);
-      console.log('ADMIN DASHBOARD DATA', res.data);
+      
       setStats(res.data);
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to load dashboard');
@@ -44,6 +44,12 @@ export default function ClinicAdminDashboard() {
   const dirClass = (d) =>
     d > 0 ? 'text-emerald-600' : d < 0 ? 'text-red-600' : 'text-gray-400';
   const arrow = (d) => (d > 0 ? '▲' : d < 0 ? '▼' : '■');
+
+  // 🔥 NEW: Calculate utilization
+  const totalSlotsToday = (stats?.totalUnbookedSlotsToday || 0) + (stats?.todayAppointments || 0);
+  const utilizationRate = totalSlotsToday > 0 
+    ? Math.round(((stats?.todayAppointments || 0) / totalSlotsToday) * 100) 
+    : 0;
 
   return (
     <ClinicAdminLayout>
@@ -81,7 +87,7 @@ export default function ClinicAdminDashboard() {
               </div>
             )}
 
-            {/* FIRST ROW */}
+            {/* 🔥 FIRST ROW - CORE METRICS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
               <BigCard
                 title="Today's Appointments"
@@ -156,8 +162,8 @@ export default function ClinicAdminDashboard() {
               />
             </div>
 
-            {/* SECOND ROW – booking status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+            {/* 🔥 SECOND ROW - STATUS BREAKDOWN */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-10">
               <StatCard
                 label="Total Bookings"
                 value={stats.totalBookings || 0}
@@ -190,18 +196,36 @@ export default function ClinicAdminDashboard() {
               />
             </div>
 
-            {/* THIRD ROW – slot utilisation */}
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <StatCard
-                label="Open Slots Today"
-                value={stats.openSlotsToday || 0}
-                border="border-emerald-500"
-              />
-              <StatCard
-                label="Expired Unbooked Slots"
-                value={stats.expiredUnbookedSlotsToday || 0}
-                border="border-rose-500"
-              />
+            {/* 🔥 THIRD ROW - SLOT UTILIZATION (NEW TOTAL CARD) */}
+            <div className="mb-10">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">
+                Slot Utilization Today ({utilizationRate}%)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {/* 🔥 TOTAL UNBOOKED - BIGGEST PRIORITY */}
+                <BigCard
+                  title="Total Unbooked Slots"
+                  value={stats.totalUnbookedSlotsToday || 0}
+                  border="border-red-500"
+                  footer={
+                    <p className="text-sm text-red-200">
+                      {stats.openSlotsToday || 0} open + {stats.expiredUnbookedSlotsToday || 0} expired
+                    </p>
+                  }
+                />
+                
+                <StatCard
+                  label="Open Slots Today"
+                  value={stats.openSlotsToday || 0}
+                  border="border-emerald-500"
+                />
+                
+                <StatCard
+                  label="Expired Unbooked"
+                  value={stats.expiredUnbookedSlotsToday || 0}
+                  border="border-rose-500"
+                />
+              </div>
             </div>
           </>
         )}

@@ -230,6 +230,24 @@ export default function ClinicAdminLayout({ children }) {
             {/* Scheduling */}
             <NavGroup title="Scheduling" groupName="Scheduling">
               <NavLink
+                to="/admin/bookings"
+                onClick={closeSidebar}
+                className={subNavLinkClasses}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h8M8 11h8M8 15h5M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                </svg>
+                <span className="flex items-center gap-2">
+                  Bookings
+                  {(unreadNotifs || 0) > 0 && (
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                    </span>
+                  )}
+                </span>
+              </NavLink>
+              <NavLink
                 to="/admin/appointments"
                 onClick={closeSidebar}
                 className={subNavLinkClasses}
@@ -250,25 +268,18 @@ export default function ClinicAdminLayout({ children }) {
                 </svg>
                 Slots
               </NavLink>
-
               <NavLink
-                to="/admin/bookings"
-                onClick={closeSidebar}
-                className={subNavLinkClasses}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h8M8 11h8M8 15h5M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-                </svg>
-                <span className="flex items-center gap-2">
-                  Bookings
-                  {(unreadNotifs || 0) > 0 && (
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
-                    </span>
-                  )}
-                </span>
-              </NavLink>
+    to="/admin/manage"  // ← NEW PATH for Block/Unblock
+    onClick={closeSidebar}
+    className={subNavLinkClasses}
+  >
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    Slot Manager
+  </NavLink>
+
+              
             </NavGroup>
 
             {/* Team Management */}

@@ -28,12 +28,24 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
   // payment mode (FREE / OFFLINE / ONLINE)
   const isOnlinePay = app?.slot?.paymentMode === "ONLINE";
 
-  // ✅ latest reschedule (your backend logs are ordered desc, but this also supports timestamp)
+  // clinic name (adjust keys if your API uses different ones)
+  const clinicName =
+    app?.clinic?.name ||
+    app?.slot?.clinic?.name ||
+    app?.clinicName ||
+    "Clinic";
+
+  const clinicCity =
+    app?.clinic?.city ||
+    app?.slot?.clinic?.city ||
+    app?.clinicCity ||
+    "";
+
+  // latest reschedule (your backend logs are ordered desc, but this also supports timestamp)
   const latestReschedule = useMemo(() => {
     if (!Array.isArray(app?.history) || app.history.length === 0) return null;
 
     const reschedules = app.history.filter((h) => h?.oldDate && h?.newDate);
-
     if (reschedules.length === 0) return null;
 
     // if timestamp exists, choose max; else keep first (desc)
@@ -97,21 +109,34 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
   const canReschedule = ["CONFIRMED", "PENDING"].includes(app.status);
   const canCancel = ["CONFIRMED", "PENDING"].includes(app.status);
 
-  // ✅ Don’t show cancel button when already requested
+  // Don’t show cancel button when already requested
   const cancelDisabled = app.status === "CANCEL_REQUESTED";
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-5 transition-all hover:shadow-md hover:border-blue-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        {/* LEFT: Doctor + status */}
+        {/* LEFT: Doctor + clinic + status */}
         <div>
-          <h3 className="font-bold text-lg text-gray-900">{app?.doctor?.name || "Doctor"}</h3>
-          <p className="text-sm text-blue-600 font-medium mb-3">{app?.doctor?.speciality || "—"}</p>
+          <h3 className="font-bold text-lg text-gray-900">
+            {app?.doctor?.name || "Doctor"}
+          </h3>
+          <p className="text-sm text-blue-600 font-medium">
+            {app?.doctor?.speciality || "—"}
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            {clinicName}
+            {clinicCity ? ` • ${clinicCity}` : ""}
+          </p>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
             {/* Date */}
             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -119,12 +144,19 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                   d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <span className="font-semibold text-gray-700">{formatDate(app?.slot?.date)}</span>
+              <span className="font-semibold text-gray-700">
+                {formatDate(app?.slot?.date)}
+              </span>
             </div>
 
             {/* Time */}
             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -132,7 +164,9 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span className="font-semibold text-gray-700">{to12Hour(app?.slot?.time)}</span>
+              <span className="font-semibold text-gray-700">
+                {to12Hour(app?.slot?.time)}
+              </span>
             </div>
           </div>
 
@@ -152,22 +186,41 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
             )}
           </div>
 
-          {/* ✅ Latest reschedule chip */}
+          {/* Latest reschedule chip */}
           {latestReschedule && (
             <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800">
               <span>⚠️ Rescheduled</span>
-              <span className="text-gray-500 line-through">{formatDate(latestReschedule.oldDate)}</span>
-              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              <span className="text-gray-500 line-through">
+                {formatDate(latestReschedule.oldDate)}
+              </span>
+              <svg
+                className="w-3 h-3 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
+                />
               </svg>
-              <span className="text-gray-900">{formatDate(latestReschedule.newDate)}</span>
+              <span className="text-gray-900">
+                {formatDate(latestReschedule.newDate)}
+              </span>
             </div>
           )}
 
           {/* Cancel reason */}
           {app.status === "CANCELLED" && app.cancelReason && (
             <div className="mt-3 bg-red-50 border border-red-200 rounded-md px-3 py-2 flex items-start gap-2">
-              <svg className="w-4 h-4 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-4 h-4 text-red-500 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -176,8 +229,12 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                 />
               </svg>
               <div>
-                <p className="text-xs font-bold text-red-700 uppercase tracking-wide">Cancelled</p>
-                <p className="text-xs text-red-700 mt-0.5">{app.cancelReason}</p>
+                <p className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                  Cancelled
+                </p>
+                <p className="text-xs text-red-700 mt-0.5">
+                  {app.cancelReason}
+                </p>
               </div>
             </div>
           )}
@@ -190,7 +247,12 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
               onClick={() => onReschedule(app)}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
             >
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -213,8 +275,18 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                     : "bg-red-50 border border-red-300 text-red-700 hover:bg-red-100"
                 }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
               {cancelDisabled
                 ? "Cancellation requested"
@@ -229,7 +301,12 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
               onClick={() => onReview(app)}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-purple-700 shadow-sm transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -243,7 +320,11 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
 
           {app.review && (
             <div className="flex items-center gap-2 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-4 py-2 rounded-lg">
-              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <svg
+                className="w-4 h-4 text-green-600"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               Rated {app.review.rating}/5
@@ -256,7 +337,12 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
       {app.prescription && (
         <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
           <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
-            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-4 h-4 text-slate-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -264,7 +350,9 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Prescription</h4>
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Prescription
+            </h4>
           </div>
           <div className="p-4 text-sm text-slate-700 font-mono whitespace-pre-line leading-relaxed">
             {app.prescription}
@@ -274,4 +362,3 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
     </div>
   );
 }
-  
