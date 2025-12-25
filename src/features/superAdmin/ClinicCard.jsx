@@ -9,6 +9,7 @@ export default function ClinicCard({ clinic, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // 1. Toggle Active (Booking Access)
   const handleToggleStatus = async () => {
     if (
       !window.confirm(
@@ -34,6 +35,25 @@ export default function ClinicCard({ clinic, onUpdate }) {
     }
   };
 
+  // ✅ 2. NEW: Toggle Public Visibility (Landing Page)
+  const handleTogglePublic = async () => {
+    setLoading(true);
+    try {
+      // Direct API call as requested
+      const res = await api.patch(
+        `/super-admin/clinics/${clinic.id}/toggle-public`, 
+        { isPublic: !clinic.isPublic }
+      );
+      toast.success(res.data.message || 'Visibility updated');
+      onUpdate();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to update visibility');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Toggle Audit Logs
   const handleToggleAudit = async () => {
     setLoading(true);
     try {
@@ -107,36 +127,15 @@ export default function ClinicCard({ clinic, onUpdate }) {
               {clinic.name}
             </h3>
             <div className="flex items-center gap-1.5 mt-1.5 text-gray-500 text-sm">
-              <svg
-                className="w-4 h-4 flex-shrink-0 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                />
+              <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <span className="truncate">{clinic.city || 'No City'}</span>
             </div>
           </div>
 
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-              clinic.isActive
-                ? 'bg-green-50 text-green-700 border-green-200'
-                : 'bg-red-50 text-red-700 border-red-200'
-            }`}
-          >
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${clinic.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
             {clinic.isActive ? 'Active' : 'Inactive'}
           </span>
         </div>
@@ -144,58 +143,54 @@ export default function ClinicCard({ clinic, onUpdate }) {
         {/* Info Grid */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">
-              Slug
-            </p>
-            <p className="text-sm font-mono text-gray-700 truncate font-medium">
-              {clinic.slug}
-            </p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Slug</p>
+            <p className="text-sm font-mono text-gray-700 truncate font-medium">{clinic.slug}</p>
           </div>
           <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
-            <p className="text-xs text-blue-500 font-medium uppercase tracking-wider mb-0.5">
-              Clicks
-            </p>
-            <p className="text-sm font-mono text-blue-700 font-bold">
-              {clinic.linkClicks ?? 0}
-            </p>
+            <p className="text-xs text-blue-500 font-medium uppercase tracking-wider mb-0.5">Clicks</p>
+            <p className="text-sm font-mono text-blue-700 font-bold">{clinic.linkClicks ?? 0}</p>
           </div>
         </div>
 
-        {/* Toggles */}
+        {/* Toggles Section */}
         <div className="space-y-3 mb-2">
+          
+          {/* 1. Booking Access */}
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-600">Booking Access</span>
             <button
               onClick={handleToggleStatus}
               disabled={loading}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                clinic.isActive ? 'bg-green-500' : 'bg-gray-200'
-              }`}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${clinic.isActive ? 'bg-green-500' : 'bg-gray-200'}`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
-                  clinic.isActive ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${clinic.isActive ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
 
+          {/* ✅ 2. NEW: Landing Page Visibility */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-600">Show on Landing</span>
+            <button
+              onClick={handleTogglePublic}
+              disabled={loading}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${clinic.isPublic ? 'bg-purple-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${clinic.isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {/* 3. Audit Logs */}
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-600">Audit Logs</span>
             <button
               onClick={handleToggleAudit}
               disabled={loading}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                clinic.allowAuditView ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${clinic.allowAuditView ? 'bg-blue-600' : 'bg-gray-200'}`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
-                  clinic.allowAuditView ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${clinic.allowAuditView ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
+
         </div>
       </div>
 
@@ -204,27 +199,9 @@ export default function ClinicCard({ clinic, onUpdate }) {
         <button
           onClick={handleCopyLink}
           disabled={loading}
-          className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors border ${
-            copied
-              ? 'bg-green-100 text-green-700 border-green-200'
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900'
-          }`}
+          className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors border ${copied ? 'bg-green-100 text-green-700 border-green-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900'}`}
         >
-          {copied ? (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-              </svg>
-              Copied
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy
-            </>
-          )}
+          {copied ? 'Copied' : 'Copy'}
         </button>
 
         <button
@@ -232,9 +209,6 @@ export default function ClinicCard({ clinic, onUpdate }) {
           disabled={loading}
           className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
           Edit
         </button>
 
@@ -243,9 +217,6 @@ export default function ClinicCard({ clinic, onUpdate }) {
           disabled={loading}
           className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-white text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
           Delete
         </button>
       </div>

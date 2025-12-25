@@ -7,6 +7,15 @@ import { ENDPOINTS } from '../../lib/endpoints';
 import { setUser, setClinic } from '../auth/authSlice';
 import { FiCheckCircle, FiChevronDown, FiArrowRight, FiArrowLeft } from 'react-icons/fi';
 
+// --- VALIDATION PATTERNS (MATCHING BACKEND ZOD) ---
+const REGEX = {
+  PHONE: /^[6-9]\d{9}$/, // India mobile (starts with 6-9, 10 digits)
+  PINCODE: /^\d{6}$/,    // 6 digit strict
+  IFSC: /^[A-Z]{4}0[A-Z0-9]{6}$/, // Standard IFSC format
+  ACCOUNT_NUM: /^\d{9,18}$/,      // 9-18 digits
+  EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ // Basic email check
+};
+
 export default function OrganizationRegisterPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -80,16 +89,46 @@ export default function OrganizationRegisterPage() {
       [e.target.name]: e.target.value,
     });
 
+  // --- UPDATED VALIDATION LOGIC ---
   const validateStep = (step) => {
+    // STEP 1: CLINIC BASICS
     if (step === 1) {
-      if (!form.clinicName.trim()) return 'Clinic Name is required';
-      if (!form.clinicPhone.trim()) return 'Clinic Phone is required';
+      if (form.clinicName.trim().length < 3) return 'Clinic Name must be at least 3 characters';
+      if (!REGEX.PHONE.test(form.clinicPhone)) return 'Invalid Clinic Mobile Number (10 digits)';
     }
+
+    // STEP 2: OWNER DETAILS
     if (step === 2) {
-      if (!form.ownerName.trim()) return 'Owner Name is required';
-      if (!form.ownerEmail.trim()) return 'Owner Email is required';
+      if (form.ownerName.trim().length < 2) return 'Owner Name too short';
+      if (!REGEX.EMAIL.test(form.ownerEmail)) return 'Invalid Email Address';
+      
+      // Optional but good to enforce if typed
+      if (form.ownerPhone && !REGEX.PHONE.test(form.ownerPhone)) {
+         return 'Invalid Owner Mobile Number';
+      }
+      
       if (!form.ownerPassword || form.ownerPassword.length < 6) {
-        return 'Password must be 6+ chars';
+        return 'Password must be at least 6 characters';
+      }
+    }
+
+    // STEP 3: ADDRESS & BANK (STRICT)
+    if (step === 3) {
+      // Address Required
+      if (form.addressLine1.trim().length < 5) return 'Address too short (min 5 chars)';
+      if (form.city.trim().length < 2) return 'City name too short';
+      if (form.state.trim().length < 2) return 'State name too short';
+      if (!REGEX.PINCODE.test(form.pincode)) return 'Invalid Pincode (must be 6 digits)';
+
+      // Bank (Optional BUT Strict if filled)
+      if (form.bankName.trim() && form.bankName.trim().length < 2) {
+        return 'Bank Name is too short';
+      }
+      if (form.accountNumber.trim() && !REGEX.ACCOUNT_NUM.test(form.accountNumber)) {
+        return 'Account Number must be 9-18 digits';
+      }
+      if (form.ifscCode.trim() && !REGEX.IFSC.test(form.ifscCode)) {
+        return 'Invalid IFSC Code (e.g., SBIN0001234)';
       }
     }
     return null;
@@ -105,6 +144,10 @@ export default function OrganizationRegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Validate final step before submitting
+    const error = validateStep(3);
+    if (error) return toast.error(error);
+    
     if (!form.planId) return toast.error('Please select a plan');
 
     setRegistering(true);
@@ -118,10 +161,18 @@ export default function OrganizationRegisterPage() {
       if (clinic) dispatch(setClinic(clinic));
 
       toast.success(`Welcome ${user?.name || 'Admin'}!`);
+      // Use replace to prevent back-button navigation to register page
       window.location.replace('/admin/dashboard');
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.error || 'Registration failed');
+      
+      // Handle Zod Array Errors specifically if backend sends them
+      if (err.response?.data?.details && Array.isArray(err.response.data.details)) {
+         // Show the first validation error from the array
+         toast.error(err.response.data.details[0]); 
+      } else {
+         toast.error(err.response?.data?.error || 'Registration failed');
+      }
     } finally {
       setRegistering(false);
     }
@@ -129,7 +180,7 @@ export default function OrganizationRegisterPage() {
 
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans text-slate-900">
-      {/* Left Panel – scrolls with page, no sticky */}
+      {/* Left Panel */}
       <div className="hidden lg:flex w-1/3 bg-[#003366] text-white flex-col p-12 relative overflow-hidden min-h-screen">
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-white/10 rounded-full blur-2xl" />
         <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-white/10 rounded-full blur-2xl" />
@@ -191,7 +242,7 @@ export default function OrganizationRegisterPage() {
         </div>
       </div>
 
-      {/* Right Panel – cleaner layout, smaller card */}
+      {/* Right Panel */}
       <div className="w-full lg:w-2/3 flex flex-col min-h-screen">
         <div className="px-4 py-10 sm:px-8 lg:px-12 w-full flex justify-center">
           <div className="w-full max-w-2xl">
@@ -231,13 +282,14 @@ export default function OrganizationRegisterPage() {
                       autoFocus
                     />
                     <InputField
-                      label="Clinic Phone"
+                      label="Clinic Phone (10 digits)"
                       name="clinicPhone"
-                      placeholder="+91 99442 54475"
+                      placeholder="9944254475"
                       value={form.clinicPhone}
                       onChange={handleChange}
                       required
                       type="tel"
+                      maxLength={10}
                     />
                     <InputField
                       label="City"
@@ -271,11 +323,12 @@ export default function OrganizationRegisterPage() {
                       type="email"
                     />
                     <InputField
-                      label="Mobile Number"
+                      label="Mobile Number (Optional)"
                       name="ownerPhone"
-                      placeholder="+91 99442 54475"
+                      placeholder="9944254475"
                       value={form.ownerPhone}
                       onChange={handleChange}
+                      maxLength={10}
                     />
                     <InputField
                       label="Create Password"
@@ -319,6 +372,7 @@ export default function OrganizationRegisterPage() {
                           placeholder="641001"
                           value={form.pincode}
                           onChange={handleChange}
+                          maxLength={6}
                         />
                       </div>
                     </div>
@@ -349,7 +403,9 @@ export default function OrganizationRegisterPage() {
                           name="ifscCode"
                           placeholder="HDFC0001234"
                           value={form.ifscCode}
-                          onChange={handleChange}
+                          onChange={(e) => 
+                            setForm({ ...form, ifscCode: e.target.value.toUpperCase() })
+                          }
                         />
                       </div>
                     </div>
@@ -435,7 +491,7 @@ export default function OrganizationRegisterPage() {
 
             {/* Support line under card */}
             <p className="mt-4 text-xs text-slate-500 text-center">
-              Need help? Email support@docbook.app or call +91-98765-43210.
+              Need help? Email <a href="mailto:support@docbook.app" className="text-blue-600 underline">support@docbook.app</a> or call +91-98765-43210.
             </p>
           </div>
         </div>
@@ -466,12 +522,5 @@ const FeatureRow = ({ title, subtitle }) => (
       <div className="font-semibold">{title}</div>
       <div className="text-blue-200 text-xs mt-0.5">{subtitle}</div>
     </div>
-  </div>
-);
-
-const TrustRow = ({ text }) => (
-  <div className="flex items-center gap-2">
-    <span className="w-2 h-2 rounded-full bg-emerald-300" />
-    {text}
   </div>
 );

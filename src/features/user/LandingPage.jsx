@@ -12,6 +12,9 @@ const DEFAULT_LOGO =
   "https://cdn-icons-png.flaticon.com/128/4521/4521401.png";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+// --- Helper Functions ---
+
+// 1. Format Timings
 const formatClinicTimings = (timings) => {
   if (!timings) return "Timings not available";
   if (typeof timings === "string") return timings;
@@ -22,12 +25,34 @@ const formatClinicTimings = (timings) => {
   return "Timings not available";
 };
 
-const toFullUrl = (url) => {
-  if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_BASE_URL}${url}`;
+// 2. Format Description (Handle Object or String)
+const formatClinicDescription = (details) => {
+  if (!details || typeof details !== "string" || details.trim() === "") {
+    return "This clinic provides multi-specialty outpatient care, diagnostics, and appointment-based consultations.";
+  }
+  return details;
 };
 
+// 3. Safe URL Generator (Fixes Localhost vs IP issues)
+const toFullUrl = (url) => {
+  if (!url) return null;
+  
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    if (url.includes("localhost") && window.location.hostname !== "localhost") {
+      return url.replace("localhost", window.location.hostname);
+    }
+    return url;
+  }
+
+  const origin = API_BASE_URL 
+    ? API_BASE_URL.replace(/\/api\/?$/, "") 
+    : "http://localhost:5003";
+  
+  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  return `${origin}${cleanPath}`;
+};
+
+// 4. Animation Variants
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
   visible: (i = 0) => ({
@@ -79,7 +104,7 @@ export default function LandingPage() {
 
   return (
     <UserLayout>
-      {/* Hero + search */}
+      {/* --- Hero Section --- */}
       <motion.section
         className="bg-white pt-10 pb-16 text-center px-4"
         initial="hidden"
@@ -99,13 +124,13 @@ export default function LandingPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search clinics by name or city..."
-            className="w-full px-4 py-3 rounded-full border border-gray-300 shadow-sm outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+            className="w-full px-4 py-3 rounded-full border border-gray-300 shadow-sm outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
           />
         </div>
       </motion.section>
 
-      {/* Clinics grid */}
-      <section className="bg-gray-50 py-12">
+      {/* --- Clinics Grid Section --- */}
+      <section className="bg-gray-50 py-12 min-h-screen">
         <div className="max-w-7xl mx-auto px-4">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-8 border-l-4 border-sky-900 pl-4 flex items-center gap-2">
             <span className="text-xl">🏥</span>
@@ -131,25 +156,11 @@ export default function LandingPage() {
               {clinics.map((clinic, idx) => {
                 const banner = toFullUrl(clinic.banner) || DEFAULT_BANNER;
                 const logoSrc = toFullUrl(clinic.logo) || DEFAULT_LOGO;
-
-                const ratingRaw = clinic.googleRating;
-                const rating =
-                  ratingRaw != null && ratingRaw !== ""
-                    ? Number(ratingRaw)
-                    : null;
-
-                const totalReviewsRaw = clinic.googleTotalReviews;
-                const totalReviews =
-                  totalReviewsRaw != null && totalReviewsRaw !== ""
-                    ? Number(totalReviewsRaw)
-                    : null;
-
-                const reviewUrl =
-                  clinic.googleRatingUrl || clinic.googleMapsUrl || null;
-
-                const description =
-                  clinic.details ||
-                  "This clinic provides multi-specialty outpatient care, diagnostics, and appointment-based consultations.";
+                
+                const rating = clinic.googleRating ? Number(clinic.googleRating) : null;
+                const totalReviews = clinic.googleTotalReviews ? Number(clinic.googleTotalReviews) : 0;
+                const timings = formatClinicTimings(clinic.timings);
+                const description = formatClinicDescription(clinic.details);
 
                 return (
                   <motion.button
@@ -158,144 +169,105 @@ export default function LandingPage() {
                     variants={fadeUp}
                     initial="hidden"
                     animate="visible"
-                    whileHover={{ y: -3 }}
+                    whileHover={{ y: -5 }}
                     onClick={() => navigate(`/clinics/${clinic.id}`)}
-                    className="relative text-left rounded-2xl overflow-hidden
-                               border border-gray-200 bg-white shadow-sm
-                               hover:shadow-lg transition-all duration-200
-                               focus:outline-none focus:ring-2 focus:ring-sky-500/60"
+                    className="group flex flex-col h-full bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden text-left focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    {/* Banner */}
-                    <div className="h-32 w-full overflow-hidden relative">
+                    {/* 1. Banner Image Area */}
+                    <div className="relative h-44 w-full overflow-hidden bg-gray-100 shrink-0">
                       <img
                         src={banner}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         alt={clinic.name}
+                        onError={(e) => { e.currentTarget.src = DEFAULT_BANNER; }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
-                    </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60" />
 
-                    {/* Card body */}
-                    <div className="relative p-6 pt-10">
-                      {/* Logo */}
-                      <div className="absolute -top-10 left-6 p-1 bg-white rounded-xl shadow-md">
+                      {/* Floating Logo */}
+                      <div className="absolute -bottom-6 left-6 p-1 bg-white rounded-xl shadow-md border border-gray-100 z-10">
                         <img
                           src={logoSrc}
-                          className="w-16 h-16 object-contain rounded-lg"
-                          alt={`${clinic.name} logo`}
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_LOGO;
-                          }}
+                          className="w-14 h-14 object-contain rounded-lg bg-white"
+                          alt="logo"
+                          onError={(e) => { e.currentTarget.src = DEFAULT_LOGO; }}
                         />
                       </div>
+                    </div>
 
-                      {/* Name + rating row */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-lg text-slate-900">
+                    {/* 2. Content Area */}
+                    <div className="flex flex-col flex-1 p-6 pt-9">
+                      
+                      {/* Name & Rating */}
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <div className="min-w-0">
+                          <h3 
+                            className="font-bold text-lg text-slate-900 line-clamp-1 group-hover:text-sky-700 transition-colors" 
+                            title={clinic.name}
+                          >
                             {clinic.name}
                           </h3>
-                          <p className="text-xs uppercase tracking-wide text-slate-400 mt-0.5">
-                            {clinic.city}
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide truncate">
+                            {clinic.city || "City Not Listed"}
                           </p>
                         </div>
-
-                        {rating !== null &&
-                          !Number.isNaN(rating) &&
-                          rating > 0 && (
-                            <div className="inline-flex flex-col items-end gap-1">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 border border-amber-100 text-[11px] font-semibold text-amber-800">
-                                ⭐ {rating.toFixed(1)} / 5
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                {totalReviews &&
-                                !Number.isNaN(totalReviews) &&
-                                totalReviews > 0
-                                  ? `${totalReviews} reviews`
-                                  : "New on Google"}
-                              </span>
-                            </div>
-                          )}
+                        
+                        {rating && rating > 0 && (
+                          <div className="flex flex-col items-end shrink-0">
+                            <span className="inline-flex items-center px-2 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100 whitespace-nowrap">
+                              ⭐ {rating.toFixed(1)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 mt-0.5">
+                              {totalReviews > 0 ? `${totalReviews} reviews` : "New"}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Address */}
-                      <p className="text-sm text-slate-600 mt-3 line-clamp-2">
-                        {clinic.address}, {clinic.city}
-                        {clinic.pincode ? ` - ${clinic.pincode}` : ""}
-                      </p>
-
-                      {/* Description */}
-                      <p className="text-xs text-slate-500 mt-2 line-clamp-2">
-                        {description}
-                      </p>
-
-                      {/* Phone number */}
-                      {clinic.phone && clinic.phone !== "0000000000" && (
-                        <p className="flex items-center gap-2 mt-2 text-sm text-slate-600">
-                          <svg
-                            className="w-4 h-4 flex-shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                            />
-                          </svg>
-                          <a
-                            href={`tel:${clinic.phone}`}
-                            className="font-semibold text-sky-700 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {clinic.phone}
-                          </a>
+                      {/* Location (Fixed height) */}
+                      <div className="mb-2 min-h-[20px]">
+                        <p className="text-sm text-slate-600 line-clamp-1 font-medium" title={clinic.address}>
+                          📍 {clinic.address}
                         </p>
-                      )}
-
-                      {/* Timings */}
-                      {clinic.timings && (
-                        <p className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                          <svg
-                            className="w-3.5 h-3.5 flex-shrink-0"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                          {formatClinicTimings(clinic.timings)}
-                        </p>
-                      )}
-
-                      {/* Google review link */}
-                      {reviewUrl && (
-                        <a
-                          href={reviewUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 hover:underline underline-offset-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Write a Google review
-                          <span className="text-[10px]">↗</span>
-                        </a>
-                      )}
-
-                      {/* CTA row */}
-                      <div className="mt-5 pt-4 border-t border-gray-200 flex items-center justify-between text-sm">
-                        <span className="text-sky-900 font-semibold flex items-center gap-2">
-                          View Specialists <span>→</span>
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          Tap card to see doctors
-                        </span>
                       </div>
+
+                      {/* ✅ ADDED: Description (Below Location) */}
+                    
+
+                      {/* Info Details */}
+                      <div className="space-y-2 mb-6 border-t border-gray-100 pt-3">
+                         {clinic.phone && clinic.phone !== "0000000000" && (
+                           <div className="flex items-center gap-2 text-sm text-slate-600">
+                             <span className="text-sky-500">📞</span>
+                             <span className="font-medium hover:underline hover:text-sky-700">
+                               {clinic.phone}
+                             </span>
+                           </div>
+                         )}
+                         <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <span className="text-sky-500">⏰</span>
+                            <span className="line-clamp-1">{timings}</span>
+                         </div>
+                      </div>
+
+                      {/* Footer / CTA */}
+                      <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+                         <span className="text-sm font-bold text-sky-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                           View Specialists <span>→</span>
+                         </span>
+                         
+                         {clinic.googleRatingUrl && (
+                           <a 
+                             href={clinic.googleRatingUrl}
+                             onClick={(e) => e.stopPropagation()}
+                             target="_blank"
+                             rel="noreferrer"
+                             className="text-xs text-slate-400 hover:text-sky-600 hover:underline flex items-center gap-1"
+                           >
+                             Google Review ↗
+                           </a>
+                         )}
+                      </div>
+
                     </div>
                   </motion.button>
                 );
