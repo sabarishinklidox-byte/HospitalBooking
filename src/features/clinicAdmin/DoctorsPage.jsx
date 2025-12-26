@@ -6,56 +6,34 @@ import Modal from '../../components/Modal.jsx';
 import toast from 'react-hot-toast';
 import { ENDPOINTS } from '../../lib/endpoints';
 
-const SPECIALITIES_ENUM = [
-  { label: 'Dentist', value: 'DENTIST' },
-  { label: 'Cardiologist', value: 'CARDIOLOGIST' },
-  { label: 'Neurologist', value: 'NEUROLOGIST' },
-  { label: 'Orthopedic', value: 'ORTHOPEDIC' },
-  { label: 'Gynecologist', value: 'GYNECOLOGIST' },
-  { label: 'Pediatrician', value: 'PEDIATRICIAN' },
-  { label: 'Dermatologist', value: 'DERMATOLOGIST' },
-  { label: 'Ophthalmologist', value: 'OPHTHALMOLOGIST' },
-  { label: 'General Physician', value: 'GENERAL_PHYSICIAN' },
-  { label: 'Other', value: 'OTHER' },
-];
-
 const INITIAL_FORM = {
   name: '',
   email: '',
   phone: '',
-  speciality: '',
+  specialityId: '', // Changed from 'speciality' to 'specialityId'
   experience: '',
   avatar: '',
   password: '',
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL; // e.g., http://localhost:5000/api
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 /**
  * ✅ FIXED URL BUILDER
- * Ensures the final URL points to http://localhost:5000/uploads/...
- * even if the base URL contains /api.
  */
 const buildAvatarUrl = (raw) => {
   if (!raw) return null;
-
-  // If backend already sends full URL, just use it
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     return raw;
   }
-
-  // Get origin without /api -> http://localhost:5000
   const origin = API_BASE_URL.replace(/\/api\/?$/, '');
-
-  // Ensure leading slash on path from DB
-  const path = raw.startsWith('/') ? raw : `/${raw}`; // '/uploads/xyz.jpg'
-
-  // Final URL: http://localhost:5000/uploads/xyz.jpg
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
   return `${origin}${path}`;
 };
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState([]);
+  const [specialities, setSpecialities] = useState([]); // ✅ New State for Specialities
   const [loading, setLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -63,22 +41,32 @@ export default function DoctorsPage() {
   const [form, setForm] = useState(INITIAL_FORM);
   const [avatarFile, setAvatarFile] = useState(null);
 
-  const fetchDoctors = async () => {
+  // 1. Fetch Doctors AND Specialities
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
-      const list = Array.isArray(res.data) ? res.data : res.data.doctors || [];
-      setDoctors(list);
+      const [docRes, specRes] = await Promise.all([
+        api.get(ENDPOINTS.ADMIN.DOCTORS),
+        api.get(ENDPOINTS.ADMIN.SPECIALITIES) // ✅ Fetch Dynamic List
+      ]);
+
+      const docList = Array.isArray(docRes.data) ? docRes.data : docRes.data.doctors || [];
+      setDoctors(docList);
+      
+      // Filter only active specialities for the dropdown
+      const activeSpecs = Array.isArray(specRes.data) ? specRes.data.filter(s => s.isActive) : [];
+      setSpecialities(activeSpecs);
+
     } catch (err) {
-      console.error('fetchDoctors error', err.response?.data || err);
-      toast.error(err.response?.data?.error || 'Failed to load doctors');
+      console.error('fetchData error', err);
+      toast.error('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDoctors();
+    fetchData();
   }, []);
 
   const openCreateModal = () => {
@@ -94,7 +82,8 @@ export default function DoctorsPage() {
       name: doc.name || '',
       email: doc.userEmail || '',
       phone: doc.phone || '',
-      speciality: doc.speciality || '',
+      // Check if your doctor object returns speciality object or ID
+      specialityId: doc.speciality?.id || doc.specialityId || '', 
       experience: String(doc.experience || ''),
       avatar: doc.avatar || '',
       password: '',
@@ -113,7 +102,10 @@ export default function DoctorsPage() {
     formData.append('name', form.name);
     if (form.email) formData.append('email', form.email);
     if (form.phone) formData.append('phone', form.phone);
-    formData.append('speciality', form.speciality);
+    
+    // ✅ Send 'specialityId' to backend
+    formData.append('specialityId', form.specialityId); 
+    
     formData.append('experience', form.experience);
 
     if (avatarFile) {
@@ -139,7 +131,7 @@ export default function DoctorsPage() {
         setForm(INITIAL_FORM);
         setAvatarFile(null);
         setEditingDoctorId(null);
-        fetchDoctors();
+        fetchData(); // Refresh list
         return editingDoctorId ? 'Doctor updated!' : 'Doctor created!';
       },
       error: (err) => err.response?.data?.error || 'Failed to save doctor',
@@ -150,16 +142,18 @@ export default function DoctorsPage() {
     await toast.promise(api.patch(ENDPOINTS.ADMIN.DOCTOR_TOGGLE_ACTIVE(id)), {
       loading: isActive ? 'Deactivating...' : 'Activating...',
       success: () => {
-        fetchDoctors();
+        fetchData();
         return isActive ? 'Doctor deactivated' : 'Doctor activated';
       },
       error: 'Failed to update doctor status',
     });
   };
 
-  const getSpecialityLabel = (val) => {
-    const found = SPECIALITIES_ENUM.find((s) => s.value === val);
-    return found ? found.label : val;
+  // ✅ Helper to show speciality Name from ID
+  const getSpecialityLabel = (doc) => {
+    if (doc.speciality && doc.speciality.name) return doc.speciality.name; // If populated object
+    const found = specialities.find(s => s.id === doc.specialityId);
+    return found ? found.name : 'Unknown';
   };
 
   const renderStatusBadge = (isActive) => {
@@ -258,7 +252,6 @@ export default function DoctorsPage() {
                                 alt={doc.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  // ✅ Prevent infinite reload loop
                                   e.currentTarget.onerror = null; 
                                   e.currentTarget.parentElement.innerHTML = `<span>${doc.name.charAt(0).toUpperCase()}</span>`;
                                 }}
@@ -273,7 +266,10 @@ export default function DoctorsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{getSpecialityLabel(doc.speciality)}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                         {/* ✅ Show Dynamic Label */}
+                         {getSpecialityLabel(doc)}
+                      </td>
                       <td className="px-4 py-3 text-gray-700">{doc.experience ? `${doc.experience} yrs` : '—'}</td>
                       <td className="px-4 py-3 text-gray-700">{doc.phone || '—'}</td>
                       <td className="px-4 py-3">{renderStatusBadge(doc.isActive)}</td>
@@ -342,17 +338,21 @@ export default function DoctorsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">Speciality*</label>
                 <select
-                  name="speciality"
+                  name="specialityId" 
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={form.speciality}
+                  value={form.specialityId}
                   onChange={handleChange}
                 >
                   <option value="">-- Select Speciality --</option>
-                  {SPECIALITIES_ENUM.map((spec) => (
-                    <option key={spec.value} value={spec.value}>{spec.label}</option>
+                  {/* ✅ Map Dynamic Specialities */}
+                  {specialities.map((spec) => (
+                    <option key={spec.id} value={spec.id}>{spec.name}</option>
                   ))}
                 </select>
+                <p className="text-[10px] text-gray-400 mt-1">
+                   Missing one? <a href="/admin/specialities" className="text-blue-600 underline">Add it here</a>
+                </p>
               </div>
             </div>
 

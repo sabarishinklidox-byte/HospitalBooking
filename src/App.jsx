@@ -38,6 +38,7 @@ import ClinicAdminSlotsUsagePage from './features/clinicAdmin/ClinicAdminSlotsUs
 import BillingPage from './features/clinicAdmin/BillingPage.jsx';
 import ClinicAppointmentsPage from './features/clinicAdmin/ClinicAppointmentsPage.jsx';
 import ClinicSlotManager  from './features/clinicAdmin/ClinicSlotManager.jsx';
+import SpecialityManager from './features/clinicAdmin/SpecialityManager';
 
 // --- DOCTOR ---
 import DoctorDashboard from './features/doctor/DoctorDashboard.jsx';
@@ -274,6 +275,7 @@ function AppContent() {
                     path="patients/:userId/history"
                     element={<PatientHistoryPage />}
                   />
+                  <Route path="specialities" element={<SpecialityManager />} /> 
                    <Route path="appointments" element={<ClinicAppointmentsPage />} />
                   <Route path="reviews" element={<ReviewsPage />} />
                   <Route

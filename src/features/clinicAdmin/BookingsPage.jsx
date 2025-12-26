@@ -60,36 +60,47 @@ export default function BookingsPage() {
     dateFrom: filterDateFrom || undefined,
     dateTo: filterDateTo || undefined,
   });
+const fetchDoctors = async () => {
+  try {
+    const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
+    const safeDoctors = (res.data || []).map(d => ({
+      ...d,
+      speciality: d.speciality?.name || d.speciality || 'Unknown'
+    }));
+    setDoctors(safeDoctors);
+  } catch (err) {
+    console.error("Failed to fetch doctors:", err);
+  }
+};
 
-  const fetchDoctors = async () => {
-    try {
-      const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
-      setDoctors(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch doctors:", err);
-    }
-  };
+// 🔥 Transform appointments to safe data
+const fetchAppointments = async (page = 1) => {
+  setLoading(true);
+  try {
+    const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, {
+      params: { ...buildParams(), page, limit: 10 },
+    });
 
-  const fetchAppointments = async (page = 1) => {
-    setLoading(true);
-    try {
-      const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, {
-        params: { ...buildParams(), page, limit: 10 },
-      });
-
-      if (res.data?.data) {
-        setAppointments(res.data.data);
-        setPagination(res.data.pagination);
-      } else {
-        setAppointments(res.data || []);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Failed to load appointments");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const rawData = res.data?.data || res.data || [];
+    const safeAppointments = rawData.map(a => ({
+      ...a,
+      doctorSpecialization: a.doctorSpecialization?.name || 
+                          a.doctorSpecialization || 
+                          a.doctor?.speciality?.name || 
+                          'Unknown',
+      doctorName: a.doctorName || a.doctor?.name || 'Unknown Doctor',
+      patientName: a.patientName || a.patient?.name || 'Unknown Patient'
+    }));
+    
+    setAppointments(safeAppointments);
+    setPagination(res.data.pagination);
+  } catch (err) {
+    console.error(err);
+    toast.error(err?.response?.data?.error || "Failed to load appointments");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ✅ Return promise for toast.promise
   // IMPORTANT: do NOT pass "type" from UI in normal flow,
@@ -465,7 +476,8 @@ const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
         <span className="text-lg">👨‍⚕️</span>
         <div>
           <span className="font-bold text-gray-900 block">{app.doctorName}</span>
-          <span className="text-xs text-blue-600">{app.doctorSpecialization}</span>
+         <span className="text-xs text-blue-600">{app.doctorSpecialization || 'Unknown'}</span>
+
         </div>
       </div>
 
@@ -518,7 +530,8 @@ const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
     <td className="p-5">
       <div className="text-gray-900 text-sm font-bold">{app.doctorName}</div>
       <div className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-max mt-1 font-medium">
-        {app.doctorSpecialization}
+      {app.doctorSpecialization || 'Unknown'}
+
       </div>
     </td>
 

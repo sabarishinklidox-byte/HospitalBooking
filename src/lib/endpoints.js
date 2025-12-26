@@ -38,6 +38,8 @@ PAYMENT: {
   ADMIN: {
   LOGIN: '/admin/login',
   DASHBOARD: '/admin/dashboard',
+      SPECIALITIES: '/admin/specialities',
+    SPECIALITY_BY_ID: (id) => `/admin/specialities/${id}`,
 
   DOCTORS: '/admin/doctors',
   DOCTOR_BY_ID: (id) => `/admin/doctors/${id}`,

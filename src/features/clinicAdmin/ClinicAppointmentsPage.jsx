@@ -10,18 +10,34 @@ export default function ClinicAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedForReschedule, setSelectedForReschedule] = useState(null);
 
-  const fetchAppointments = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, { params: { limit: 20 } });
-      setAppointments(res.data?.data || []);
-    } catch (e) {
-      console.error("load admin appointments error", e);
-      setAppointments([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+const fetchAppointments = async () => {
+  setLoading(true);
+  try {
+    const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, { params: { limit: 20 } });
+    
+    const rawData = res.data?.data || [];
+    const safeAppointments = rawData.map(a => ({
+      ...a,
+      // 🔥 Force ALL fields to strings
+      doctorSpecialization: a.doctorSpecialization?.name || 
+                          a.doctorSpecialization || 
+                          a.doctor?.speciality?.name || 
+                          'Unknown',
+      doctorName: a.doctorName || a.doctor?.name || 'Unknown Doctor',
+      patientName: a.patientName || a.patient?.name || 'Unknown Patient',
+      dateFormatted: a.dateFormatted || 'N/A',
+      timeFormatted: a.timeFormatted || 'N/A'
+    }));
+    
+    setAppointments(safeAppointments);
+  } catch (e) {
+    console.error("load admin appointments error", e);
+    setAppointments([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const updateStatus = async (apptId, status) => {
     try {
@@ -78,8 +94,10 @@ export default function ClinicAppointmentsPage() {
                   <td className="px-4 py-3">
                     {a.doctorName || a.doctor?.name}
                     <div className="text-[11px] text-gray-500">
-                      {a.doctorSpecialization || a.doctor?.speciality}
-                    </div>
+{a.doctorSpecialization || a.doctor?.speciality?.name || 'Unknown'}  
+
+</div>
+
                   </td>
 
                   <td className="px-4 py-3">
@@ -102,7 +120,10 @@ export default function ClinicAppointmentsPage() {
                             id: a.id,
                             doctorId,
                             doctorName: a.doctorName || a.doctor?.name,
-                            doctorSpeciality: a.doctorSpecialization || a.doctor?.speciality,
+                      doctorSpeciality:
+  a.doctorSpecialization ||
+  a.doctor?.speciality?.name ||
+  'Unknown',
                             date: a.dateFormatted,
                             time: a.timeFormatted,
                           });

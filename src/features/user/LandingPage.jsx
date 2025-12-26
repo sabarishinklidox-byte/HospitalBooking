@@ -250,23 +250,31 @@ export default function LandingPage() {
                       </div>
 
                       {/* Footer / CTA */}
-                      <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
-                         <span className="text-sm font-bold text-sky-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
-                           View Specialists <span>→</span>
-                         </span>
-                         
-                         {clinic.googleRatingUrl && (
-                           <a 
-                             href={clinic.googleRatingUrl}
-                             onClick={(e) => e.stopPropagation()}
-                             target="_blank"
-                             rel="noreferrer"
-                             className="text-xs text-slate-400 hover:text-sky-600 hover:underline flex items-center gap-1"
-                           >
-                             Google Review ↗
-                           </a>
-                         )}
-                      </div>
+  <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between">
+  <span className="text-sm font-bold text-sky-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+    View Specialists <span>→</span>
+  </span>
+
+  <a
+    href={
+      clinic.googleMapsUrl ||
+      `https://www.google.com/maps/search/${encodeURIComponent(
+        clinic.name + " " + clinic.city
+      )}`
+    }
+    onClick={(e) => e.stopPropagation()}
+    target="_blank"
+    rel="noreferrer"
+    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full
+               text-[11px] font-semibold text-slate-500
+               bg-slate-50 border border-slate-200
+               hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700
+               transition-colors"
+  >
+    <span className="text-sky-500 text-sm">★</span>
+    <span>Google Maps &amp; reviews</span>
+  </a>
+</div>
 
                     </div>
                   </motion.button>

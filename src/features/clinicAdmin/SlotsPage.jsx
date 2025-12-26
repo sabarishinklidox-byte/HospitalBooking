@@ -273,7 +273,7 @@ export default function SlotsPage() {
                 <option value="">-- Choose a Doctor --</option>
                 {doctors.map((doc) => (
                   <option key={doc.id} value={doc.id}>
-                    {doc.name} - {doc.speciality}
+                    {doc.name} - {doc.speciality.name}
                   </option>
                 ))}
               </select>

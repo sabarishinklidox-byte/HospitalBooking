@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 import { useAdminContext } from '../../context/AdminContext.jsx';
 import { ENDPOINTS } from '../../lib/endpoints';
 
-// --- HELPER: Calculate Exact Time Remaining ---
 const calculateTimeLeft = (startDate, durationDays) => {
   if (!startDate || !durationDays) return null;
 
@@ -18,10 +17,10 @@ const calculateTimeLeft = (startDate, durationDays) => {
   const now = new Date();
   const difference = expiryDate - now;
 
-  // Check if expired
-  if (difference <= 0) return { expired: true, expiryDate };
+  if (difference <= 0) {
+    return { expired: true, expiryDate };
+  }
 
-  // Calculate units
   const days = Math.floor(difference / (1000 * 60 * 60 * 24));
   const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
   const minutes = Math.floor((difference / 1000 / 60) % 60);
@@ -31,7 +30,10 @@ const calculateTimeLeft = (startDate, durationDays) => {
     days,
     hours,
     minutes,
-    expiryDate: expiryDate.toLocaleDateString() + ' ' + expiryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    expiryDate:
+      expiryDate.toLocaleDateString() +
+      ' ' +
+      expiryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 };
 
@@ -43,37 +45,40 @@ export default function BillingPage() {
     loading: ctxLoading,
   } = useAdminContext();
 
-  // Get the subscription object directly from the clinic data
   const currentSubscription = clinic?.subscription;
+  const isExpiredStatus = currentSubscription?.status === 'EXPIRED';
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upgradingPlanId, setUpgradingPlanId] = useState(null);
-  
-  // State for the countdown timer
   const [timeLeft, setTimeLeft] = useState(null);
 
-  // --- EFFECT: Update Timer Every Minute ---
   useEffect(() => {
     if (currentSubscription?.startDate && currentSubscription?.durationDays) {
       const updateTimer = () => {
-        const left = calculateTimeLeft(currentSubscription.startDate, currentSubscription.durationDays);
+        const left = calculateTimeLeft(
+          currentSubscription.startDate,
+          currentSubscription.durationDays
+        );
         setTimeLeft(left);
       };
 
-      updateTimer(); // Run immediately
-      const interval = setInterval(updateTimer, 60000); // Update every 60 seconds
+      updateTimer();
+      const interval = setInterval(updateTimer, 60000);
 
       return () => clearInterval(interval);
+    } else {
+      setTimeLeft(null);
     }
   }, [currentSubscription]);
 
-  // --- FUNCTION: Load Available Plans ---
+  const isExpiredNow = isExpiredStatus || timeLeft?.expired;
+
   const loadPlans = async () => {
     setLoading(true);
     try {
       const res = await api.get(ENDPOINTS.PUBLIC.PLANS);
-      
+
       let plansData = [];
       if (Array.isArray(res.data)) {
         plansData = res.data;
@@ -86,7 +91,7 @@ export default function BillingPage() {
         setPlans([]);
         return;
       }
-      
+
       setPlans(plansData.filter((p) => p.isActive && !p.deletedAt));
     } catch (err) {
       console.error(err);
@@ -101,7 +106,6 @@ export default function BillingPage() {
     loadPlans();
   }, []);
 
-  // --- FUNCTION: Upgrade Plan ---
   const handleUpgrade = async (targetPlanId) => {
     if (!window.confirm('Switch to this plan for your clinic?')) return;
     setUpgradingPlanId(targetPlanId);
@@ -109,7 +113,7 @@ export default function BillingPage() {
       await api.post(ENDPOINTS.ADMIN.SUBSCRIPTION_UPGRADE, {
         planId: targetPlanId,
       });
-      await reloadAdmin(); // refresh admin + clinic + plan context
+      await reloadAdmin();
       toast.success('Plan upgraded successfully');
     } catch (err) {
       console.error(err);
@@ -132,7 +136,6 @@ export default function BillingPage() {
   return (
     <ClinicAdminLayout>
       <div className="mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
             Subscription &amp; Billing
@@ -142,23 +145,29 @@ export default function BillingPage() {
           </p>
         </div>
 
-        {/* --- NEW SECTION: LIVE COUNTDOWN TIMER --- */}
-        {currentPlan && timeLeft && (
-          <div className={`rounded-xl shadow-sm border p-6 mb-8 flex flex-col md:flex-row items-center justify-between transition-colors duration-500 ${
-            timeLeft.expired ? 'bg-red-50 border-red-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100'
-          }`}>
+        {currentPlan && currentSubscription && (
+          <div
+            className={`rounded-xl shadow-sm border p-6 mb-8 flex flex-col md:flex-row items-center justify-between transition-colors duration-500 ${
+              isExpiredNow
+                ? 'bg-red-50 border-red-200'
+                : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100'
+            }`}
+          >
             <div>
-              <h2 className={`text-lg font-bold flex items-center gap-2 ${timeLeft.expired ? 'text-red-700' : 'text-blue-900'}`}>
-                {timeLeft.expired ? (
-                  <>⚠️ Plan Expired</>
-                ) : (
-                  <>⏳ Time Remaining</>
-                )}
+              <h2
+                className={`text-lg font-bold flex items-center gap-2 ${
+                  isExpiredNow ? 'text-red-700' : 'text-blue-900'
+                }`}
+              >
+                {isExpiredNow ? <>⚠️ Plan Expired</> : <>⏳ Time Remaining</>}
               </h2>
               <p className="text-sm text-gray-600 mt-1">
-                Started on: {new Date(currentSubscription.startDate).toLocaleDateString()}
+                Started on:{' '}
+                {new Date(
+                  currentSubscription.startDate
+                ).toLocaleDateString()}
               </p>
-              {!timeLeft.expired && (
+              {!isExpiredNow && timeLeft && (
                 <p className="text-sm text-gray-600">
                   Expires on: <strong>{timeLeft.expiryDate}</strong>
                 </p>
@@ -166,51 +175,76 @@ export default function BillingPage() {
             </div>
 
             <div className="mt-4 md:mt-0">
-               {!timeLeft.expired ? (
-                 <div className="flex gap-3 text-center">
-                    <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
-                      <div className="text-2xl font-bold text-blue-600">{timeLeft.days}</div>
-                      <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Days</div>
+              {!isExpiredNow && timeLeft ? (
+                <div className="flex gap-3 text-center">
+                  <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {timeLeft.days}
                     </div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
-                      <div className="text-2xl font-bold text-blue-600">{timeLeft.hours}</div>
-                      <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Hours</div>
+                    <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">
+                      Days
                     </div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
-                       <div className="text-2xl font-bold text-blue-600">{timeLeft.minutes}</div>
-                       <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Mins</div>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {timeLeft.hours}
                     </div>
-                 </div>
-               ) : (
-                 <button 
-                   onClick={() => document.getElementById('plans-grid').scrollIntoView({ behavior: 'smooth' })}
-                   className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow hover:bg-red-700 transition-colors animate-pulse"
-                 >
-                   Renew / Upgrade Now
-                 </button>
-               )}
+                    <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">
+                      Hours
+                    </div>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg shadow-sm w-20 border border-blue-100">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {timeLeft.minutes}
+                    </div>
+                    <div className="text-[10px] uppercase text-gray-500 font-bold tracking-wider">
+                      Mins
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() =>
+                    document
+                      .getElementById('plans-grid')
+                      .scrollIntoView({ behavior: 'smooth' })
+                  }
+                  className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow hover:bg-red-700 transition-colors animate-pulse"
+                >
+                  Renew / Upgrade Now
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {/* Current plan details */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-2">
-            Current Plan Details
+            Current Plan Details{' '}
+            {isExpiredNow && (
+              <span className="ml-2 text-xs font-semibold text-red-600">
+                (Expired)
+              </span>
+            )}
           </h2>
           {currentPlan ? (
             <>
               <p className="text-gray-800 font-semibold text-lg">
                 {currentPlan.name}{' '}
                 <span className="text-base text-gray-500 font-normal">
-                  ({currentPlan.currency} {Number(currentPlan.priceMonthly)} / month)
+                  ({currentPlan.currency}{' '}
+                  {Number(currentPlan.priceMonthly)} / month)
                 </span>
               </p>
               <p className="text-sm text-gray-500 mt-2">
-                Limits: Max {currentPlan.maxDoctors} doctors, {currentPlan.maxBookingsPerMonth} bookings/mo.
+                Limits: Max {currentPlan.maxDoctors} doctors,{' '}
+                {currentPlan.maxBookingsPerMonth} bookings/mo.
               </p>
               <p className="text-sm text-gray-500">
-                Type: {currentPlan.durationDays ? `${currentPlan.durationDays} days` : 'Monthly'}
+                Type:{' '}
+                {currentPlan.durationDays
+                  ? `${currentPlan.durationDays} days`
+                  : 'Monthly'}
                 {currentPlan.isTrial && ' (Trial Mode)'}
               </p>
             </>
@@ -219,8 +253,10 @@ export default function BillingPage() {
           )}
         </div>
 
-        {/* Available plans */}
-        <div id="plans-grid" className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div
+          id="plans-grid"
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-5"
+        >
           <h2 className="text-lg font-bold text-gray-800 mb-4">
             Available Plans
           </h2>
@@ -228,6 +264,8 @@ export default function BillingPage() {
           <div className="grid md:grid-cols-3 gap-6">
             {plans.map((plan) => {
               const isCurrent = currentPlan && plan.id === currentPlan.id;
+              const isCurrentAndActive = isCurrent && !isExpiredNow;
+
               return (
                 <div
                   key={plan.id}
@@ -249,31 +287,33 @@ export default function BillingPage() {
 
                   <ul className="space-y-1.5 mb-6 text-xs text-gray-600 mt-4">
                     <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                        Up to {plan.maxDoctors} doctors
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      Up to {plan.maxDoctors} doctors
                     </li>
                     <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                        {plan.maxBookingsPerMonth} bookings / period
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      {plan.maxBookingsPerMonth} bookings / period
                     </li>
                     <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                        {plan.durationDays ? `${plan.durationDays} day plan` : 'Monthly plan'}
-                        {plan.isTrial && ' · Trial'}
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                      {plan.durationDays
+                        ? `${plan.durationDays} day plan`
+                        : 'Monthly plan'}
+                      {plan.isTrial && ' · Trial'}
                     </li>
 
                     {plan.enableGoogleReviews && (
                       <li className="flex items-center gap-2 text-green-700 font-medium">
-                        <span className="text-green-500">✓</span> Google Ratings & Reviews
+                        <span className="text-green-500">✓</span> Google Ratings
+                        &amp; Reviews
                       </li>
                     )}
-                    
-                    {/* Extra Features */}
+
                     {plan.allowOnlinePayments && <li>• Online payments</li>}
                     {plan.enableExports && <li>• Export data</li>}
                   </ul>
 
-                  {isCurrent ? (
+                  {isCurrentAndActive ? (
                     <button
                       disabled
                       className="w-full py-2.5 rounded bg-gray-100 text-gray-500 text-xs font-bold uppercase tracking-wide cursor-default border border-gray-200"
@@ -288,6 +328,8 @@ export default function BillingPage() {
                     >
                       {upgradingPlanId === plan.id
                         ? 'Processing...'
+                        : isCurrent && isExpiredNow
+                        ? 'Renew Plan'
                         : 'Switch to Plan'}
                     </button>
                   )}

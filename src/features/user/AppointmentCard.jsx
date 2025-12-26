@@ -121,7 +121,8 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
             {app?.doctor?.name || "Doctor"}
           </h3>
           <p className="text-sm text-blue-600 font-medium">
-            {app?.doctor?.speciality || "—"}
+{app?.doctor?.speciality?.name || app?.doctor?.speciality || "—"}
+
           </p>
           <p className="text-xs text-gray-500 mb-3">
             {clinicName}

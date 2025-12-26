@@ -29,6 +29,7 @@ const toFullUrl = (url) => {
   return `${origin}${cleanPath}`;
 };
 
+
 const formatPrice = (price) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -89,6 +90,7 @@ export default function UserBookingPage() {
     () => selectedDate?.toISOString?.().split('T')[0],
     [selectedDate]
   );
+  
 
   const DOCTOR_URL = useMemo(
     () => ENDPOINTS.PUBLIC.DOCTOR_BY_ID(doctorId),
@@ -434,9 +436,9 @@ export default function UserBookingPage() {
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900">{doctor.name}</h2>
-            <p className="text-blue-600 font-medium mb-2">
-              {getSpecialityLabel(doctor.speciality)}
-            </p>
+         <p className="text-blue-600 font-medium mb-2">
+  {doctor.speciality?.name || doctor.speciality || 'Unknown'}
+</p>
 
             {doctor.clinic && (
               <div className="flex items-center justify-center gap-1 text-sm text-gray-500 bg-gray-50 py-2 rounded-lg">

@@ -13,39 +13,55 @@ export default function ClinicAdminLayout({ children }) {
   // --- CONTEXT DATA ---
   const { plan, clinic, loading, unreadNotifs, refreshUnread } = useAdminContext() || {};
 
-  // --- 🔒 SUBSCRIPTION CHECK (Redirect if Expired) ---
-  useEffect(() => {
-    // Only run check if not loading and we have subscription data
-    if (!loading && clinic?.subscription) {
-      if (clinic.subscription.status === 'EXPIRED') {
-        
-        // ✅ List of pages ALLOWED even when expired
-        // Users need to see billing, profile, payment history, and settings
-        const allowedPaths = [
-          '/admin/billing', 
-          '/admin/profile', 
-          '/admin/payment-settings', 
-          '/admin/settings',
-          '/admin/payments',       // Allow viewing payment history
-          '/admin/audit-logs',     // Allow viewing audit logs
-          '/admin/dashboard'       // Optional: Allow viewing dashboard (read-only)
-        ];
-        
-        // If they try to go to restricted pages (like /doctors or /bookings), REDIRECT
-        // We check if the current path STARTS with any of the allowed paths
-        const isAllowed = allowedPaths.some(path => location.pathname.startsWith(path));
+useEffect(() => {
+  console.log('SUB GUARD >>>', {
+    loading,
+    path: location.pathname,
+    clinicId: clinic?.id,
+    sub: clinic?.subscription,
+    status: clinic?.subscription?.status,
+  });
 
-        if (!isAllowed) {
-          navigate('/admin/billing');
-        }
-      }
+  if (loading || !clinic) return;
+
+  const sub = clinic.subscription;
+  const status = sub?.status?.toUpperCase();
+    // DEBUG: see what layout gets
+
+  const isInvalid =
+  !sub || ['EXPIRED', 'INACTIVE', 'CANCELLED', 'PAST_DUE'].includes(status);
+
+  if (isInvalid) {
+    const allowedPaths = [
+      '/admin/billing',
+      '/admin/profile',
+      '/admin/payment-settings',
+      '/admin/settings',
+      '/admin/payments',
+      '/admin/audit-logs',
+      '/admin/dashboard',
+      '/admin/payment-success',
+      '/admin/payment-failure',
+      '/admin/subscription/callback',
+    ];
+
+    const isAllowed = allowedPaths.some(path => location.pathname.startsWith(path));
+
+    if (!isAllowed) {
+      console.warn(`⛔ Access Denied (Status: ${status}). Redirecting to billing.`);
+      navigate('/admin/billing', { replace: true });
     }
-  }, [clinic, loading, location.pathname, navigate]);
+  }
+}, [clinic, loading, location.pathname, navigate]);
+
 
   // --- HELPER: Get group from URL (for deep linking) ---
   const getGroupFromPath = (path) => {
     if (path.includes('/appointments') || path.includes('/slots') || path.includes('/bookings')) return 'Scheduling';
-    if (path.includes('/doctors') || path.includes('/reviews')) return 'Team';
+    
+    // ✅ CHANGED: Added '/specialities' to Team group
+    if (path.includes('/doctors') || path.includes('/reviews') || path.includes('/specialities')) return 'Team';
+    
     if (path.includes('/billing') || path.includes('/payments')) return 'Finance';
     if (path.includes('/analytics')) return 'Analytics';
     if (path.includes('/settings') || path.includes('/audit-logs')) return 'Platform';
@@ -263,6 +279,13 @@ export default function ClinicAdminLayout({ children }) {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 12c2.21 0 4-1.79 4-4S14.21 4 12 4 8 5.79 8 8s1.79 4 4 4zm0 2c-3.31 0-6 1.34-6 3v1h12v-1c0-1.66-2.69-3-6-3z" /></svg>
                 Doctors
               </NavLink>
+
+              {/* ✅ NEW: Speciality Manager */}
+              <NavLink to="/admin/specialities" onClick={closeSidebar} className={subNavLinkClasses}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                Specialities
+              </NavLink>
+
               <NavLink to="/admin/reviews" onClick={closeSidebar} className={subNavLinkClasses}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5h14v10H7l-2 2V5z" /></svg>
                 Reviews
@@ -291,7 +314,7 @@ export default function ClinicAdminLayout({ children }) {
                   Bookings Analytics
                 </NavLink>
                 <NavLink to="/admin/analytics/slots-usage" onClick={closeSidebar} className={subNavLinkClasses}>
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
                   Slots Analytics
                 </NavLink>
               </NavGroup>

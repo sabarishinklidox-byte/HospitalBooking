@@ -38,12 +38,35 @@ const formatClinicTimings = (timings) => {
 const formatDescription = (details) => {
   if (!details) return null;
   if (typeof details === 'string') return details;
-  // If object, try to find text property
   if (typeof details === 'object') {
      return details.text || details.bio || details.description || null;
   }
   return null;
 }
+
+// --- New Component for "Read More" functionality ---
+const ExpandableText = ({ text, limit = 150 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!text) return null;
+  if (text.length <= limit) {
+    return <p className="text-sm md:text-base text-slate-600 leading-relaxed text-left">{text}</p>;
+  }
+
+  return (
+    <div className="text-sm md:text-base text-slate-600 leading-relaxed text-left">
+      <p className="inline">
+        {isExpanded ? text : `${text.substring(0, limit)}...`}
+      </p>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="ml-2 text-blue-600 font-semibold hover:underline text-xs uppercase tracking-wide focus:outline-none"
+      >
+        {isExpanded ? 'Show Less' : 'Read More'}
+      </button>
+    </div>
+  );
+};
 
 export default function ClinicPublicPage() {
   const { clinicId } = useParams();
@@ -107,7 +130,7 @@ export default function ClinicPublicPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
         
         {/* --- Header Section (Banner + Info) --- */}
-        <div className="relative w-full mb-12"> {/* Reduced bottom margin slightly as we use negative margins now */}
+        <div className="relative w-full mb-12">
           
           {/* Banner Image */}
           <div className="relative rounded-2xl overflow-hidden shadow-xl h-64 sm:h-80 w-full z-0">
@@ -123,12 +146,10 @@ export default function ClinicPublicPage() {
           {/* Floating Card Container */}
           <div className="relative -mt-16 px-2 sm:px-6 z-10 flex justify-center">
              
-             {/* ✅ KEY FIX: Increased gap to 'gap-10' and better padding */}
              <div className="w-full max-w-6xl bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100 flex flex-col md:flex-row gap-8 md:gap-12 items-start">
             
-              {/* Logo - Fixed width, prevents shrinking/growing */}
+              {/* Logo */}
               <div className="shrink-0 mx-auto md:mx-0 relative"> 
-                {/* Logo Box */}
                 <div className="w-32 h-32 md:w-40 md:h-40 bg-white p-3 rounded-2xl shadow-md border border-gray-200 flex items-center justify-center -mt-16 md:-mt-20">
                   <img
                     src={logoSrc}
@@ -139,18 +160,22 @@ export default function ClinicPublicPage() {
                 </div>
               </div>
 
-              {/* Details Column - Takes remaining space */}
+              {/* Details Column */}
               <div className="flex-1 min-w-0 w-full text-center md:text-left pt-2 md:pt-1">
                 
                 {/* Title & Ratings */}
                 <div className="flex flex-col md:flex-row items-center md:items-baseline gap-3 md:gap-5 mb-3 justify-center md:justify-start">
-                  <h1 className="text-3xl md:text-4xl font-extrabold truncate text-slate-900 leading-tight" style={stylePrimaryText}>
-                    {clinic.name}
-                  </h1>
+                  <h1
+  className="text-2xl md:text-4xl font-extrabold text-slate-900 leading-tight
+             max-w-full text-center md:text-left break-words"
+  style={stylePrimaryText}
+>
+  {clinic.name.length > 26 ? clinic.name.slice(0, 26) + "…" : clinic.name}
+</h1>
 
                   {clinic.googleRating && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-sm font-bold whitespace-nowrap shadow-sm">
-                      ⭐ {Number(clinic.googleRating).toFixed(1)}
+                      ⭐ {Number(clinic.googleRating).toFixed(1)} / 5
                       {typeof clinic.googleTotalReviews === 'number' && (
                         <span className="ml-1 font-medium text-yellow-700 opacity-80">({clinic.googleTotalReviews})</span>
                       )}
@@ -159,7 +184,7 @@ export default function ClinicPublicPage() {
                 </div>
 
                 {/* Contact Info Row */}
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-8 gap-y-3 mb-6">
+                <div className="flex flex-wrap items-start justify-center md:justify-start gap-x-8 gap-y-3 mb-6">
                   {clinic.phone && (
                     <a 
                       href={`tel:${clinic.phone}`} 
@@ -174,23 +199,45 @@ export default function ClinicPublicPage() {
                     </a>
                   )}
                   
-                  <div className="flex items-center gap-2 text-base text-slate-600">
-                    <span className="p-1.5 rounded-full bg-slate-100 text-slate-500">
+                  {/* Address Section - Fixed to wrap and show full address */}
+                  <div className="flex items-start gap-2 text-base text-slate-600 text-left">
+                    <span className="p-1.5 rounded-full bg-slate-100 text-slate-500 mt-0.5">
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                       </svg>
                     </span>
-                    <span className="truncate max-w-[250px] md:max-w-xl font-medium" title={clinic.address}>{clinic.address}</span>
+                    {/* Allow full address display by removing truncate classes */}
+                    <span className="font-medium leading-snug" title={clinic.address}>
+                      {clinic.address}
+                    </span>
                   </div>
+                   {(clinic.googleMapsUrl || clinic.googlePlaceId) && (
+    <a
+      href={
+        clinic.googleMapsUrl ||
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          clinic.name + ' ' + (clinic.city || '')
+        )}`
+      }
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                 text-[11px] font-semibold text-slate-500
+                 bg-slate-50 border border-slate-200
+                 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700
+                 transition-colors"
+    >
+      <span className="text-sky-500 text-sm">★</span>
+      <span>Google Maps &amp; reviews</span>
+    </a>
+  )}
                 </div>
 
-                {/* Separator Line */}
+                {/* Description - with Read More / Show Less */}
                 {description && (
                   <div className="w-full mt-5 pt-5 border-t border-gray-200/80"> 
-                    <p className="text-sm md:text-base text-slate-600 leading-relaxed text-left">
-                      {description}
-                    </p>
+                    <ExpandableText text={description} limit={200} />
                   </div>
                 )}
 
@@ -261,7 +308,7 @@ export default function ClinicPublicPage() {
                           Dr. {doctor.name}
                         </h3>
                         <p className="font-semibold text-base mb-1" style={styleSecondaryText}>
-                          {doctor.speciality}
+                          {doctor.speciality?.name || 'Unknown'}
                         </p>
                         <p className="text-sm text-gray-500 mb-3">
                           {doctor.experience} Yrs Experience
