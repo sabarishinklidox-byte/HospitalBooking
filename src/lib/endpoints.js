@@ -40,7 +40,7 @@ PAYMENT: {
   DASHBOARD: '/admin/dashboard',
       SPECIALITIES: '/admin/specialities',
     SPECIALITY_BY_ID: (id) => `/admin/specialities/${id}`,
-
+PATIENT_HISTORY: (userId) => `/admin/patients/${userId}/history`,
   DOCTORS: '/admin/doctors',
   DOCTOR_BY_ID: (id) => `/admin/doctors/${id}`,
   DOCTOR_TOGGLE_ACTIVE: (id) => `/admin/doctors/${id}/toggle`,

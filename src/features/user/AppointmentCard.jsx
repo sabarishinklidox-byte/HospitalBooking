@@ -1,6 +1,29 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 export default function AppointmentCard({ app, onReschedule, onReview, onCancel }) {
+  const [timeLeft, setTimeLeft] = useState(10); // minutes
+
+  // 🔥 REAL-TIME COUNTDOWN
+  useEffect(() => {
+    if (app.status !== 'PENDING_PAYMENT' || app.paymentStatus !== 'PENDING') return;
+
+    const interval = setInterval(() => {
+      const created = new Date(app.createdAt);
+      const now = new Date();
+      const minutesPassed = (now - created) / (1000 * 60);
+      const minutesRemaining = Math.max(0, Math.ceil(10 - minutesPassed));
+      
+      setTimeLeft(minutesRemaining);
+      
+      // Auto-refresh when time expires
+      if (minutesRemaining === 0) {
+        window.location.reload();
+      }
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [app.createdAt, app.status, app.paymentStatus]);
+
   const formatDate = (d) =>
     d
       ? new Date(d).toLocaleDateString(undefined, {
@@ -10,57 +33,45 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
         })
       : "N/A";
 
-  // keep UI consistent with booking page
   const to12Hour = (timeStr) => {
     if (!timeStr) return "N/A";
     const [h, m] = String(timeStr).split(":");
     let hour = parseInt(h, 10);
     const minute = m ?? "00";
-
     const ampm = hour >= 12 ? "PM" : "AM";
     hour = hour % 12;
     if (hour === 0) hour = 12;
-
     const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
     return `${pad(hour)}:${pad(parseInt(minute, 10))} ${ampm}`;
   };
 
-  // payment mode (FREE / OFFLINE / ONLINE)
-  const isOnlinePay = app?.slot?.paymentMode === "ONLINE";
+  const getSpecialityLabel = (speciality) => {
+    if (!speciality) return "—";
+    if (typeof speciality === "object") return speciality.name || "—";
+    return speciality;
+  };
 
-  // clinic name (adjust keys if your API uses different ones)
-  const clinicName =
-    app?.clinic?.name ||
-    app?.slot?.clinic?.name ||
-    app?.clinicName ||
-    "Clinic";
+  // ==== PAYMENT INFO ====
+  const paymentMode = app?.slot?.paymentMode || "OFFLINE";
+  const amount = Number(app?.amount ?? app?.slot?.price ?? 0);
+  const paymentStatus = app?.paymentStatus || "PENDING";
+  const appointmentStatus = app?.status || "PENDING";
+  const financialStatus = app?.financialStatus || null;
+  const diffAmount = Number(app?.diffAmount || 0);
 
-  const clinicCity =
-    app?.clinic?.city ||
-    app?.slot?.clinic?.city ||
-    app?.clinicCity ||
-    "";
-
-  // latest reschedule (your backend logs are ordered desc, but this also supports timestamp)
-  const latestReschedule = useMemo(() => {
-    if (!Array.isArray(app?.history) || app.history.length === 0) return null;
-
-    const reschedules = app.history.filter((h) => h?.oldDate && h?.newDate);
-    if (reschedules.length === 0) return null;
-
-    // if timestamp exists, choose max; else keep first (desc)
-    if (reschedules[0]?.timestamp) {
-      return [...reschedules].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      )[0];
+  // ✅ FIXED: Status Badge Logic (HIGHEST PRIORITY)
+  const statusStyles = (() => {
+    // 🚨 1️⃣ PENDING PAYMENT = PURPLE + COUNTDOWN
+    if (appointmentStatus === "PENDING_PAYMENT" && paymentStatus === "PENDING") {
+      return {
+        badge: "bg-purple-50 text-purple-700 border-purple-200 animate-pulse",
+        dot: "bg-purple-500",
+        label: `PAYMENT REQUIRED ⏰ ${timeLeft}min`,
+      };
     }
 
-    return reschedules[0];
-  }, [app?.history]);
-
-  // helper for status colors incl. CANCEL_REQUESTED
-  const statusStyles = (() => {
-    switch (app.status) {
+    // 2️⃣ Normal status flow
+    switch (appointmentStatus) {
       case "CONFIRMED":
         return {
           badge: "bg-green-50 text-green-700 border-green-200",
@@ -101,33 +112,133 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
         return {
           badge: "bg-gray-50 text-gray-700 border-gray-200",
           dot: "bg-gray-500",
-          label: app.status || "UNKNOWN",
+          label: appointmentStatus || "UNKNOWN",
         };
     }
   })();
 
+  // ✅ FIXED: Payment Label Logic
+  const paymentLabel = (() => {
+    // 1️⃣ NEW BOOKING - PAYMENT REQUIRED
+    if (appointmentStatus === "PENDING_PAYMENT" && paymentStatus === "PENDING") {
+      return `Pay ₹${amount} in ${timeLeft}min`;
+    }
+
+    // 2️⃣ PAYMENT HOLD (PENDING + PAY_DIFFERENCE)
+    if (paymentStatus === "PENDING" && financialStatus === "PAY_DIFFERENCE" && diffAmount > 0) {
+      return `Pay ₹${diffAmount} more`;
+    }
+
+    // 3️⃣ DIFFERENCE/REFUND (Reschedule cases)
+    if (financialStatus === "PAY_DIFFERENCE" && diffAmount > 0) {
+      return `Reschedule: Pay ₹${diffAmount} more`;
+    }
+    if (financialStatus === "REFUND_AT_CLINIC" && diffAmount > 0) {
+      return `Reschedule: ₹${diffAmount} refund`;
+    }
+
+    // 4️⃣ COMPLETED appointments ONLY show "PAID"
+    if (appointmentStatus === "COMPLETED") {
+      if (paymentMode === "ONLINE") {
+        return `Paid ₹${amount} Online`;
+      }
+      if (paymentMode === "FREE") {
+        return `Free Consultation`;
+      }
+      return `Paid ₹${amount}`;
+    }
+
+    // 5️⃣ PENDING/CONFIRMED - Normal booking labels
+    if (paymentMode === "ONLINE") {
+      return `Booked ₹${amount} Online`;
+    }
+    if (paymentMode === "FREE") {
+      return `Free Booking`;
+    }
+    return `Booked ₹${amount} (Clinic)`;
+  })();
+
+  // ✅ FIXED: Payment Styles
+  const paymentStyles = (() => {
+    // 1️⃣ NEW BOOKING - PURPLE + URGENT
+    if (appointmentStatus === "PENDING_PAYMENT" && paymentStatus === "PENDING") {
+      return "bg-purple-50 text-purple-700 border-purple-200 animate-pulse";
+    }
+    // 2️⃣ Payment Hold = PURPLE
+    if (paymentStatus === "PENDING" && financialStatus === "PAY_DIFFERENCE") {
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    }
+    // 3️⃣ Difference payments (orange)
+    if (financialStatus === "PAY_DIFFERENCE") {
+      return "bg-orange-50 text-orange-800 border-orange-200";
+    }
+    // 4️⃣ Refunds (amber)
+    if (financialStatus === "REFUND_AT_CLINIC") {
+      return "bg-amber-50 text-amber-800 border-amber-200";
+    }
+    // 5️⃣ COMPLETED = Green
+    if (appointmentStatus === "COMPLETED") {
+      return "bg-green-50 text-green-700 border-green-200";
+    }
+    // 6️⃣ Online pending/confirmed = Purple
+    if (paymentMode === "ONLINE") {
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    }
+    // 7️⃣ Offline/Free = Gray
+    return "bg-slate-50 text-slate-700 border-slate-200";
+  })();
+
+  const isOnlinePay = paymentMode === "ONLINE";
+  const clinicName = app?.clinic?.name || app?.slot?.clinic?.name || app?.clinicName || "Clinic";
+  const clinicCity = app?.clinic?.city || app?.slot?.clinic?.city || app?.clinicCity || "";
+
+  // latest reschedule from logs
+  const latestReschedule = useMemo(() => {
+    if (!Array.isArray(app?.history) || app.history.length === 0) return null;
+    const reschedules = app.history.filter((h) => h?.oldDate && h?.newDate);
+    if (reschedules.length === 0) return null;
+    if (reschedules[0]?.timestamp) {
+      return [...reschedules].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+    }
+    return reschedules[0];
+  }, [app?.history]);
+
   const canReschedule = ["CONFIRMED", "PENDING"].includes(app.status);
   const canCancel = ["CONFIRMED", "PENDING"].includes(app.status);
-
-  // Don’t show cancel button when already requested
   const cancelDisabled = app.status === "CANCEL_REQUESTED";
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-5 transition-all hover:shadow-md hover:border-blue-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        {/* LEFT: Doctor + clinic + status */}
-        <div>
-          <h3 className="font-bold text-lg text-gray-900">
-            {app?.doctor?.name || "Doctor"}
-          </h3>
-          <p className="text-sm text-blue-600 font-medium">
-{app?.doctor?.speciality?.name || app?.doctor?.speciality || "—"}
+        {/* LEFT */}
+        <div className="w-full md:w-auto">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-bold text-lg text-gray-900">
+                {app?.doctor?.name || "Doctor"}
+              </h3>
 
-          </p>
-          <p className="text-xs text-gray-500 mb-3">
-            {clinicName}
-            {clinicCity ? ` • ${clinicCity}` : ""}
-          </p>
+              <p className="text-sm text-blue-600 font-medium">
+                {getSpecialityLabel(app?.doctor?.speciality)}
+              </p>
+
+              <p className="text-xs text-gray-500 mb-3">
+                {clinicName}
+                {clinicCity ? ` • ${clinicCity}` : ""}
+              </p>
+            </div>
+
+            {/* Mobile payment badge */}
+            <div className="md:hidden text-right flex flex-col items-end gap-1">
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide ${paymentStyles}`}
+              >
+                {paymentLabel}
+              </span>
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
             {/* Date */}
@@ -169,9 +280,18 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                 {to12Hour(app?.slot?.time)}
               </span>
             </div>
+
+            {/* Desktop payment badge */}
+            <div
+              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md border bg-slate-50 border-gray-200 ${paymentStyles}`}
+            >
+              <span className="text-[11px] font-bold uppercase tracking-wide">
+                {paymentLabel}
+              </span>
+            </div>
           </div>
 
-          {/* Status badge */}
+          {/* ✅ FIXED Status Badge - Shows "PAYMENT REQUIRED ⏰ 8min" 🟣 */}
           <div className="mt-4">
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border uppercase tracking-wider ${statusStyles.badge}`}
@@ -187,7 +307,7 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
             )}
           </div>
 
-          {/* Latest reschedule chip */}
+          {/* Rest of component unchanged... */}
           {latestReschedule && (
             <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800">
               <span>⚠️ Rescheduled</span>
@@ -226,23 +346,21 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d="M12 9v2m0 4h.01M12 5a7 7 0 100 14 7 7 0 000-14z"
+                  d="M12 9v2m0 4h.01M12 5a7 7 0 100 14a7 7 0 000-14z"
                 />
               </svg>
               <div>
                 <p className="text-xs font-bold text-red-700 uppercase tracking-wide">
                   Cancelled
                 </p>
-                <p className="text-xs text-red-700 mt-0.5">
-                  {app.cancelReason}
-                </p>
+                <p className="text-xs text-red-700 mt-0.5">{app.cancelReason}</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* RIGHT: Actions */}
-        <div className="flex flex-col gap-2 self-start md:self-center w-full md:w-auto">
+        {/* RIGHT: Actions - UNCHANGED */}
+        <div className="flex flex-col gap-2 self-start md:self-center w-full md:w-auto mt-4 md:mt-0">
           {canReschedule && (
             <button
               onClick={() => onReschedule(app)}
@@ -269,12 +387,11 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
             <button
               onClick={() => onCancel?.(app)}
               disabled={cancelDisabled}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm
-                ${
-                  cancelDisabled
-                    ? "bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-red-50 border border-red-300 text-red-700 hover:bg-red-100"
-                }`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm ${
+                cancelDisabled
+                  ? "bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-red-50 border border-red-300 text-red-700 hover:bg-red-100"
+              }`}
             >
               <svg
                 className="w-4 h-4"
@@ -321,11 +438,7 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
 
           {app.review && (
             <div className="flex items-center gap-2 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-4 py-2 rounded-lg">
-              <svg
-                className="w-4 h-4 text-green-600"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               Rated {app.review.rating}/5
@@ -334,7 +447,7 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
         </div>
       </div>
 
-      {/* Prescription */}
+      {/* Prescription - UNCHANGED */}
       {app.prescription && (
         <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
           <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">

@@ -14,13 +14,6 @@ export default function ClinicAdminLayout({ children }) {
   const { plan, clinic, loading, unreadNotifs, refreshUnread } = useAdminContext() || {};
 
 useEffect(() => {
-  console.log('SUB GUARD >>>', {
-    loading,
-    path: location.pathname,
-    clinicId: clinic?.id,
-    sub: clinic?.subscription,
-    status: clinic?.subscription?.status,
-  });
 
   if (loading || !clinic) return;
 

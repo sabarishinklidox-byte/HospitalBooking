@@ -31,13 +31,45 @@ const CancelMeta = ({ app }) => {
   );
 };
 
+// 💰 FIXED PAYMENT SUMMARY HELPER
+const getPaymentSummary = (app) => {
+  const paymentMode = app.slot?.paymentMode || "CLINIC";
+  const amount = Number(app.amount ?? app.slot?.price ?? 0);
+  const { paymentStatus, financialStatus, diffAmount, status } = app;
+
+  if (status !== "COMPLETED") {
+    if (financialStatus === "PAY_DIFFERENCE" && diffAmount > 0)
+      return `Need to collect ₹${diffAmount} at clinic`;
+    if (financialStatus === "REFUND_AT_CLINIC" && diffAmount > 0)
+      return `Need to refund ₹${diffAmount} at clinic`;
+
+    if (paymentMode === "FREE") return "Free";
+
+    if (paymentMode === "ONLINE" && paymentStatus === "PAID")
+      return `Paid ₹${amount} online`;
+
+    if (paymentMode === "CLINIC")
+      return paymentStatus === "PAID"
+        ? `Paid at clinic ₹${amount}`
+        : `To collect ₹${amount} at clinic`;
+
+    return `Amount ₹${amount}`;
+  }
+
+  if (paymentStatus === "PAID") return `Settled: Paid ₹${amount}`;
+  if (paymentStatus === "REFUNDED") return `Settled: Refunded ₹${amount}`;
+  if (paymentStatus === "PARTIAL") return `Settled: Partial payment`;
+  return "Completed – payment pending";
+};
+
+
 export default function BookingsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const { plan, loading: planLoading, refreshUnread } = useAdminContext() || {};
-  const canUseExports = !!plan?.enableAuditLogs;
+  const canUseExports = !!plan?.enableAuditLogs; // Adjust based on your plan logic
 
   // Filters
   const [filterStatus, setFilterStatus] = useState("");
@@ -60,61 +92,58 @@ export default function BookingsPage() {
     dateFrom: filterDateFrom || undefined,
     dateTo: filterDateTo || undefined,
   });
-const fetchDoctors = async () => {
-  try {
-    const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
-    const safeDoctors = (res.data || []).map(d => ({
-      ...d,
-      speciality: d.speciality?.name || d.speciality || 'Unknown'
-    }));
-    setDoctors(safeDoctors);
-  } catch (err) {
-    console.error("Failed to fetch doctors:", err);
-  }
-};
 
-// 🔥 Transform appointments to safe data
-const fetchAppointments = async (page = 1) => {
-  setLoading(true);
-  try {
-    const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, {
-      params: { ...buildParams(), page, limit: 10 },
-    });
+  const fetchDoctors = async () => {
+    try {
+      const res = await api.get(ENDPOINTS.ADMIN.DOCTORS);
+      const safeDoctors = (res.data || []).map((d) => ({
+        ...d,
+        speciality: d.speciality?.name || d.speciality || "Unknown",
+      }));
+      setDoctors(safeDoctors);
+    } catch (err) {
+      console.error("Failed to fetch doctors:", err);
+    }
+  };
 
-    const rawData = res.data?.data || res.data || [];
-    const safeAppointments = rawData.map(a => ({
-      ...a,
-      doctorSpecialization: a.doctorSpecialization?.name || 
-                          a.doctorSpecialization || 
-                          a.doctor?.speciality?.name || 
-                          'Unknown',
-      doctorName: a.doctorName || a.doctor?.name || 'Unknown Doctor',
-      patientName: a.patientName || a.patient?.name || 'Unknown Patient'
-    }));
-    
-    setAppointments(safeAppointments);
-    setPagination(res.data.pagination);
-  } catch (err) {
-    console.error(err);
-    toast.error(err?.response?.data?.error || "Failed to load appointments");
-  } finally {
-    setLoading(false);
-  }
-};
+  const fetchAppointments = async (page = 1) => {
+    setLoading(true);
+    try {
+      const res = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS, {
+        params: { ...buildParams(), page, limit: 10 },
+      });
+      const rawData = res.data?.data || res.data || [];
+      const safeAppointments = rawData.map((a) => ({
+        ...a,
+        doctorSpecialization:
+          a.doctorSpecialization?.name ||
+          a.doctorSpecialization ||
+          a.doctor?.speciality?.name ||
+          "Unknown",
+        doctorName: a.doctorName || a.doctor?.name || "Unknown Doctor",
+        patientName: a.patientName || a.patient?.name || "Unknown Patient",
+      }));
 
-  // ✅ Return promise for toast.promise
-  // IMPORTANT: do NOT pass "type" from UI in normal flow,
-  // because we want to mark both CANCELLATION + RESCHEDULE as read for that booking. [web:769]
+      setAppointments(safeAppointments);
+      setPagination(res.data.pagination);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Failed to load appointments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const markNotifReadForAppointment = (appointmentId, type) => {
     const payload = { entityId: appointmentId };
     if (type) payload.type = type;
     return api.patch(ENDPOINTS.ADMIN.NOTIFICATIONS_MARK_READ_BY_ENTITY, payload);
   };
 
-  // ✅ Show Mark as read if ANY unread booking notification exists
-  // (backend sends hasUnreadCancellation + hasUnreadReschedule)
   const canShowMarkAsRead = (app) => {
-    return app.hasUnreadCancellation === true || app.hasUnreadReschedule === true;
+    return (
+      app.hasUnreadCancellation === true || app.hasUnreadReschedule === true
+    );
   };
 
   const handleMarkAsRead = async (app) => {
@@ -159,7 +188,11 @@ const fetchAppointments = async (page = 1) => {
       if (!confirmNoShow) return;
     } else {
       const action = newStatus === "COMPLETED" ? "Mark Complete" : "Approve";
-      if (!window.confirm(`Are you sure you want to ${action} this appointment?`)) {
+      if (
+        !window.confirm(
+          `Are you sure you want to ${action} this appointment?`
+        )
+      ) {
         return;
       }
     }
@@ -170,7 +203,10 @@ const fetchAppointments = async (page = 1) => {
     );
 
     await toast.promise(
-      api.patch(ENDPOINTS.ADMIN.APPOINTMENT_STATUS(id), { status: newStatus, reason }),
+      api.patch(ENDPOINTS.ADMIN.APPOINTMENT_STATUS(id), {
+        status: newStatus,
+        reason,
+      }),
       {
         loading: "Updating status...",
         success: async () => {
@@ -190,10 +226,13 @@ const fetchAppointments = async (page = 1) => {
     if (!canUseExports) return;
     setExporting(true);
     try {
-      const response = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_EXCEL, {
-        params: buildParams(),
-        responseType: "blob",
-      });
+      const response = await api.get(
+        ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_EXCEL,
+        {
+          params: buildParams(),
+          responseType: "blob",
+        }
+      );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -218,10 +257,13 @@ const fetchAppointments = async (page = 1) => {
     if (!canUseExports) return;
     setExporting(true);
     try {
-      const response = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_PDF, {
-        params: buildParams(),
-        responseType: "blob",
-      });
+      const response = await api.get(
+        ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_PDF,
+        {
+          params: buildParams(),
+          responseType: "blob",
+        }
+      );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -250,16 +292,10 @@ const fetchAppointments = async (page = 1) => {
     setFilterDateTo("");
   };
 
-  const activeFiltersCount = [
-    filterStatus,
-    filterDoctor,
-    filterPatient,
-    filterDateFrom,
-    filterDateTo,
-  ].filter((f) => f !== "").length;
-
   const isRescheduled = (app) =>
-    app.history && Array.isArray(app.history) && app.history.some((h) => h.oldDate);
+    app.history &&
+    Array.isArray(app.history) &&
+    app.history.some((h) => h.oldDate);
 
   if (planLoading) {
     return (
@@ -283,18 +319,102 @@ const fetchAppointments = async (page = 1) => {
               Manage patient appointments and track their status.
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
+          
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* ✅ ADDED EXPORT BUTTONS HERE */}
+            {canUseExports && (
+              <div className="flex gap-2">
+                 <button 
+                  onClick={exportToExcel}
+                  disabled={exporting}
+                  className="px-3 py-1.5 bg-white border border-green-600 text-green-700 rounded-lg text-xs font-bold hover:bg-green-50 transition disabled:opacity-50 flex items-center gap-1"
+                >
+                  📊 Excel
+                </button>
+                <button 
+                  onClick={exportToPDF}
+                  disabled={exporting}
+                  className="px-3 py-1.5 bg-white border border-red-600 text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-1"
+                >
+                  📄 PDF
+                </button>
+              </div>
+            )}
+
+            <span className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
               {pagination.total} Total
             </span>
           </div>
         </div>
 
         {!canUseExports && (
-          <UpgradeNotice feature="Export to Excel and Export to PDF" planName={plan?.name} />
+          <UpgradeNotice
+            feature="Export to Excel and Export to PDF"
+            planName={plan?.name}
+          />
         )}
 
-        {/* Filters UI unchanged... */}
+        {/* --- FILTERS SECTION --- */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No Show</option>
+            </select>
+
+            <select
+              value={filterDoctor}
+              onChange={(e) => setFilterDoctor(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Doctors</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="text"
+              placeholder="Search patient..."
+              value={filterPatient}
+              onChange={(e) => setFilterPatient(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={clearFilters}
+                title="Clear Filters"
+                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
 
         {loading ? (
           <div className="py-32 flex justify-center">
@@ -302,6 +422,7 @@ const fetchAppointments = async (page = 1) => {
           </div>
         ) : (
           <>
+            {/* Mobile list */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
               {appointments.length === 0 ? (
                 <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
@@ -321,6 +442,7 @@ const fetchAppointments = async (page = 1) => {
               )}
             </div>
 
+            {/* Desktop table */}
             <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -338,6 +460,9 @@ const fetchAppointments = async (page = 1) => {
                       Status
                     </th>
                     <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
+                      Payment
+                    </th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -347,7 +472,7 @@ const fetchAppointments = async (page = 1) => {
                   {appointments.length === 0 ? (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="6"
                         className="p-16 text-center text-gray-500 italic bg-gray-50"
                       >
                         No bookings found matching your criteria.
@@ -458,7 +583,13 @@ const ActionButtons = ({ app, onUpdate }) => {
   );
 };
 
-const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => (
+const MobileAppointmentCard = ({
+  app,
+  onUpdate,
+  isRescheduled,
+  canShowMarkAsRead,
+  onMarkAsRead,
+}) => (
   <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
     <div className="flex justify-between items-start mb-4">
       <div>
@@ -475,9 +606,12 @@ const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
       <div className="flex items-center gap-3">
         <span className="text-lg">👨‍⚕️</span>
         <div>
-          <span className="font-bold text-gray-900 block">{app.doctorName}</span>
-         <span className="text-xs text-blue-600">{app.doctorSpecialization || 'Unknown'}</span>
-
+          <span className="font-bold text-gray-900 block">
+            {app.doctorName}
+          </span>
+          <span className="text-xs text-blue-600">
+            {app.doctorSpecialization || "Unknown"}
+          </span>
         </div>
       </div>
 
@@ -485,7 +619,21 @@ const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
         <span className="text-lg">🕒</span>
         <div>
           <span className="font-medium block">{app.dateFormatted}</span>
-          <span className="text-xs text-gray-500 font-mono">{app.timeFormatted}</span>
+          <span className="text-xs text-gray-500 font-mono">
+            {app.timeFormatted}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <span className="text-lg">💰</span>
+        <div className="text-xs text-gray-700">
+          <span className="font-semibold">{getPaymentSummary(app)}</span>
+          {app.adminNote && (
+            <div className="mt-0.5 text-[11px] text-gray-500 italic">
+              {app.adminNote}
+            </div>
+          )}
         </div>
       </div>
 
@@ -514,7 +662,13 @@ const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
   </div>
 );
 
-const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => (
+const DesktopAppointmentRow = ({
+  app,
+  onUpdate,
+  isRescheduled,
+  canShowMarkAsRead,
+  onMarkAsRead,
+}) => (
   <tr className="hover:bg-blue-50/30 transition-colors">
     <td className="p-5">
       <div className="font-bold text-gray-900">{app.patientName}</div>
@@ -530,14 +684,17 @@ const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
     <td className="p-5">
       <div className="text-gray-900 text-sm font-bold">{app.doctorName}</div>
       <div className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-max mt-1 font-medium">
-      {app.doctorSpecialization || 'Unknown'}
-
+        {app.doctorSpecialization || "Unknown"}
       </div>
     </td>
 
     <td className="p-5">
-      <div className="font-medium text-gray-900 text-sm">{app.dateFormatted}</div>
-      <div className="text-xs text-gray-500 font-mono mt-0.5">{app.timeFormatted}</div>
+      <div className="font-medium text-gray-900 text-sm">
+        {app.dateFormatted}
+      </div>
+      <div className="text-xs text-gray-500 font-mono mt-0.5">
+        {app.timeFormatted}
+      </div>
 
       {isRescheduled && (
         <span className="block mt-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded w-max font-bold">
@@ -549,6 +706,18 @@ const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
     <td className="p-5">
       <StatusBadge status={app.status} />
       <CancelMeta app={app} />
+    </td>
+
+    {/* Payment column */}
+    <td className="p-5 align-top">
+      <div className="text-xs font-semibold text-gray-800">
+        {getPaymentSummary(app)}
+      </div>
+      {app.adminNote && (
+        <div className="mt-1 text-[11px] text-gray-500 italic">
+          {app.adminNote}
+        </div>
+      )}
     </td>
 
     <td className="p-5">
