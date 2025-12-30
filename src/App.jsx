@@ -53,6 +53,11 @@ import MyAppointmentsPage from './features/user/MyAppointmentsPage.jsx';
 import UserProfilePage from './features/user/UserProfilePage.jsx';
 import ClinicPublicPage from './features/user/ClinicPublicPage.jsx';
 import ClinicDetailPage from './features/user/ClinicDetailPage.jsx'
+import TermsAndConditions from './pages/policies/TermsAndConditions';
+import PrivacyPolicy from './pages/policies/PrivacyPolicy';
+import CancellationPolicy from './pages/policies/CancellationPolicy';
+import RefundPolicy from './pages/policies/RefundPolicy'
+import PricingPolicy from './pages/policies/PricingPolicy';
 // ✅ PAYMENT SUCCESS
 import PaymentSuccessPage from './features/payment/PaymentSuccessPage.jsx';
 
@@ -141,12 +146,18 @@ function AppContent() {
         {/* PUBLIC ROUTES */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+           <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
         <Route path="/doctors/:doctorId/book" element={<UserBookingPage />} />
         <Route path="/login" element={<UserLogin />} />
         <Route path="/signup" element={<UserSignup />} />
         <Route path="/visit/:clinicId" element={<ClinicPublicPage />} />
         <Route path="/register" element={<OrganizationRegisterPage />} />
 <Route path="/clinics/:clinicId" element={<ClinicDetailPage />} />
+<Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+ <Route path="/cancellation-policy" element={<CancellationPolicy />} />
+    <Route path="/pricing-policy" element={<PricingPolicy />} />
         {/* LOGIN ROUTES */}
         <Route path="/super-admin/login" element={<SuperAdminLogin />} />
         <Route path="/doctor/login" element={<DoctorLogin />} />
