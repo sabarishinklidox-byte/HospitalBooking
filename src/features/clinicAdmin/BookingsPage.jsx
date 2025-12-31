@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
 import AdminLayout from "../../layouts/ClinicAdminLayout.jsx";
 import Loader from "../../components/Loader.jsx";
@@ -7,6 +7,39 @@ import { Link } from "react-router-dom";
 import { ENDPOINTS } from "../../lib/endpoints";
 import { useAdminContext } from "../../context/AdminContext.jsx";
 import UpgradeNotice from "../../components/UpgradeNotice.jsx";
+
+// --- HELPER FUNCTIONS ---
+
+// 📅 SMART DATE FORMATTER (Today/Tomorrow/Date)
+const getRelativeDateLabel = (dateString) => {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  const now = new Date();
+  
+  // Reset time part for accurate comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  const diffTime = target - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays === -1) return "Yesterday";
+  
+  return null; // Return null if it's just a regular date
+};
+
+// 🕒 FORMAT "BOOKED ON" DATE
+const formatCreatedDate = (isoString) => {
+  if (!isoString) return "";
+  return new Date(isoString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+  });
+};
 
 const CancelMeta = ({ app }) => {
   if (app.status !== "CANCELLED") return null;
@@ -23,45 +56,92 @@ const CancelMeta = ({ app }) => {
       {who}
       {app.cancelReason ? (
         <>
-          {" "}
-          — <span className="italic">{app.cancelReason}</span>
+          {" "}— <span className="italic">{app.cancelReason}</span>
         </>
       ) : null}
     </p>
   );
 };
 
-// 💰 FIXED PAYMENT SUMMARY HELPER
+// 💰 SMART PAYMENT SUMMARY
 const getPaymentSummary = (app) => {
-  const paymentMode = app.slot?.paymentMode || "CLINIC";
-  const amount = Number(app.amount ?? app.slot?.price ?? 0);
-  const { paymentStatus, financialStatus, diffAmount, status } = app;
+  const { 
+    paymentStatus, 
+    financialStatus, 
+    diffAmount, 
+    status, 
+    amount, 
+    slot 
+  } = app;
+  
+  const paymentMode = slot?.paymentMode || "CLINIC";
+  const finalAmount = Number(amount ?? slot?.price ?? 0);
+  const difference = Number(diffAmount || 0);
 
-  if (status !== "COMPLETED") {
-    if (financialStatus === "PAY_DIFFERENCE" && diffAmount > 0)
-      return `Need to collect ₹${diffAmount} at clinic`;
-    if (financialStatus === "REFUND_AT_CLINIC" && diffAmount > 0)
-      return `Need to refund ₹${diffAmount} at clinic`;
-
-    if (paymentMode === "FREE") return "Free";
-
-    if (paymentMode === "ONLINE" && paymentStatus === "PAID")
-      return `Paid ₹${amount} online`;
-
-    if (paymentMode === "CLINIC")
-      return paymentStatus === "PAID"
-        ? `Paid at clinic ₹${amount}`
-        : `To collect ₹${amount} at clinic`;
-
-    return `Amount ₹${amount}`;
+  // 1. CANCELLED / REJECTED
+  if (["CANCELLED", "REJECTED"].includes(status)) {
+    return (
+      <span className="text-red-600">
+        Cancelled — {paymentStatus === 'PAID' ? 'Refund needed' : 'No collection'}
+      </span>
+    );
   }
 
-  if (paymentStatus === "PAID") return `Settled: Paid ₹${amount}`;
-  if (paymentStatus === "REFUNDED") return `Settled: Refunded ₹${amount}`;
-  if (paymentStatus === "PARTIAL") return `Settled: Partial payment`;
-  return "Completed – payment pending";
+  // 2. FREE APPOINTMENTS
+  if (paymentMode === "FREE" || finalAmount === 0) {
+    return <span className="text-green-600 font-bold">Free Visit</span>;
+  }
+
+  // 3. RESCHEDULE SCENARIOS
+  if (financialStatus === "PAY_DIFFERENCE" && difference > 0) {
+    return (
+      <div className="flex flex-col">
+        <span className="text-orange-700 font-bold">Collect: ₹{difference}</span>
+        <span className="text-[10px] text-gray-500">Upgrade (Total: ₹{finalAmount})</span>
+      </div>
+    );
+  }
+
+  if (financialStatus === "REFUND_AT_CLINIC" && difference > 0) {
+    return (
+      <div className="flex flex-col">
+        <span className="text-red-600 font-bold">Refund Due: ₹{difference}</span>
+        <span className="text-[10px] text-gray-500">Downgrade (New: ₹{finalAmount})</span>
+      </div>
+    );
+  }
+
+  if (financialStatus === "OFFLINE_TO_ONLINE") {
+    return (
+      <div className="flex flex-col">
+        <span className="text-blue-600 font-bold">Paid Online</span>
+        <span className="text-[10px] text-gray-500">Switched from Offline (₹{finalAmount})</span>
+      </div>
+    );
+  }
+
+  // 4. STANDARD ONLINE PAYMENT
+  if (paymentMode === "ONLINE") {
+    if (paymentStatus === "PAID") {
+      return <span className="text-green-700 font-medium">Paid Online: ₹{finalAmount}</span>;
+    } else {
+      return <span className="text-orange-600 font-medium">Pending Online: ₹{finalAmount}</span>;
+    }
+  }
+
+  // 5. STANDARD CLINIC PAYMENT
+  if (paymentMode === "CLINIC" || paymentMode === "OFFLINE") {
+    if (paymentStatus === "PAID") {
+      return <span className="text-green-700 font-medium">Paid at Clinic: ₹{finalAmount}</span>;
+    } else {
+      return <span className="text-blue-700 font-bold">Collect at Clinic: ₹{finalAmount}</span>;
+    }
+  }
+
+  return <span>Amount: ₹{finalAmount}</span>;
 };
 
+// --- MAIN COMPONENT ---
 
 export default function BookingsPage() {
   const [appointments, setAppointments] = useState([]);
@@ -69,7 +149,7 @@ export default function BookingsPage() {
   const [exporting, setExporting] = useState(false);
 
   const { plan, loading: planLoading, refreshUnread } = useAdminContext() || {};
-  const canUseExports = !!plan?.enableAuditLogs; // Adjust based on your plan logic
+  const canUseExports = !!plan?.enableAuditLogs; 
 
   // Filters
   const [filterStatus, setFilterStatus] = useState("");
@@ -160,12 +240,10 @@ export default function BookingsPage() {
 
   useEffect(() => {
     fetchDoctors();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     fetchAppointments(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterDoctor, filterPatient, filterDateFrom, filterDateTo]);
 
   const handlePageChange = (newPage) => {
@@ -178,9 +256,7 @@ export default function BookingsPage() {
     let reason = null;
 
     if (newStatus === "CANCELLED") {
-      const input = window.prompt(
-        "Enter reason for cancellation (this will be shown to the patient):"
-      );
+      const input = window.prompt("Enter reason for cancellation (shown to patient):");
       if (input === null) return;
       reason = input.trim() || null;
     } else if (newStatus === "NO_SHOW") {
@@ -188,11 +264,7 @@ export default function BookingsPage() {
       if (!confirmNoShow) return;
     } else {
       const action = newStatus === "COMPLETED" ? "Mark Complete" : "Approve";
-      if (
-        !window.confirm(
-          `Are you sure you want to ${action} this appointment?`
-        )
-      ) {
+      if (!window.confirm(`Are you sure you want to ${action} this appointment?`)) {
         return;
       }
     }
@@ -203,10 +275,7 @@ export default function BookingsPage() {
     );
 
     await toast.promise(
-      api.patch(ENDPOINTS.ADMIN.APPOINTMENT_STATUS(id), {
-        status: newStatus,
-        reason,
-      }),
+      api.patch(ENDPOINTS.ADMIN.APPOINTMENT_STATUS(id), { status: newStatus, reason }),
       {
         loading: "Updating status...",
         success: async () => {
@@ -226,28 +295,20 @@ export default function BookingsPage() {
     if (!canUseExports) return;
     setExporting(true);
     try {
-      const response = await api.get(
-        ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_EXCEL,
-        {
-          params: buildParams(),
-          responseType: "blob",
-        }
-      );
-
+      const response = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_EXCEL, {
+        params: buildParams(),
+        responseType: "blob",
+      });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute(
-        "download",
-        `bookings_${new Date().toISOString().split("T")[0]}.xlsx`
-      );
+      link.setAttribute("download", `bookings_${new Date().toISOString().split("T")[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
-      toast.success("Excel file downloaded successfully!");
+      toast.success("Excel file downloaded!");
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to export Excel file");
-      console.error(err);
+      toast.error("Failed to export Excel file");
     } finally {
       setExporting(false);
     }
@@ -257,28 +318,20 @@ export default function BookingsPage() {
     if (!canUseExports) return;
     setExporting(true);
     try {
-      const response = await api.get(
-        ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_PDF,
-        {
-          params: buildParams(),
-          responseType: "blob",
-        }
-      );
-
+      const response = await api.get(ENDPOINTS.ADMIN.APPOINTMENTS_EXPORT_PDF, {
+        params: buildParams(),
+        responseType: "blob",
+      });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute(
-        "download",
-        `bookings_${new Date().toISOString().split("T")[0]}.pdf`
-      );
+      link.setAttribute("download", `bookings_${new Date().toISOString().split("T")[0]}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
-      toast.success("PDF file downloaded successfully!");
+      toast.success("PDF file downloaded!");
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to export PDF file");
-      console.error(err);
+      toast.error("Failed to export PDF file");
     } finally {
       setExporting(false);
     }
@@ -293,16 +346,12 @@ export default function BookingsPage() {
   };
 
   const isRescheduled = (app) =>
-    app.history &&
-    Array.isArray(app.history) &&
-    app.history.some((h) => h.oldDate);
+    app.history && Array.isArray(app.history) && app.history.some((h) => h.oldDate);
 
   if (planLoading) {
     return (
       <AdminLayout>
-        <div className="py-32 flex justify-center">
-          <Loader />
-        </div>
+        <div className="py-32 flex justify-center"><Loader /></div>
       </AdminLayout>
     );
   }
@@ -315,53 +364,28 @@ export default function BookingsPage() {
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <span>📅</span> Bookings
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage patient appointments and track their status.
-            </p>
+            <p className="text-sm text-gray-500 mt-1">Manage patient appointments.</p>
           </div>
           
           <div className="flex items-center gap-3 flex-wrap">
-            {/* ✅ ADDED EXPORT BUTTONS HERE */}
             {canUseExports && (
               <div className="flex gap-2">
-                 <button 
-                  onClick={exportToExcel}
-                  disabled={exporting}
-                  className="px-3 py-1.5 bg-white border border-green-600 text-green-700 rounded-lg text-xs font-bold hover:bg-green-50 transition disabled:opacity-50 flex items-center gap-1"
-                >
-                  📊 Excel
-                </button>
-                <button 
-                  onClick={exportToPDF}
-                  disabled={exporting}
-                  className="px-3 py-1.5 bg-white border border-red-600 text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-1"
-                >
-                  📄 PDF
-                </button>
+                 <button onClick={exportToExcel} disabled={exporting} className="px-3 py-1.5 bg-white border border-green-600 text-green-700 rounded-lg text-xs font-bold hover:bg-green-50 flex items-center gap-1">📊 Excel</button>
+                <button onClick={exportToPDF} disabled={exporting} className="px-3 py-1.5 bg-white border border-red-600 text-red-700 rounded-lg text-xs font-bold hover:bg-red-50 flex items-center gap-1">📄 PDF</button>
               </div>
             )}
-
             <span className="text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
               {pagination.total} Total
             </span>
           </div>
         </div>
 
-        {!canUseExports && (
-          <UpgradeNotice
-            feature="Export to Excel and Export to PDF"
-            planName={plan?.name}
-          />
-        )}
+        {!canUseExports && <UpgradeNotice feature="Export to Excel/PDF" planName={plan?.name} />}
 
-        {/* --- FILTERS SECTION --- */}
+        {/* FILTERS */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="CONFIRMED">Confirmed</option>
@@ -369,65 +393,27 @@ export default function BookingsPage() {
               <option value="CANCELLED">Cancelled</option>
               <option value="NO_SHOW">No Show</option>
             </select>
-
-            <select
-              value={filterDoctor}
-              onChange={(e) => setFilterDoctor(e.target.value)}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={filterDoctor} onChange={(e) => setFilterDoctor(e.target.value)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
               <option value="">All Doctors</option>
-              {doctors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
+              {doctors.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
-
-            <input
-              type="text"
-              placeholder="Search patient..."
-              value={filterPatient}
-              onChange={(e) => setFilterPatient(e.target.value)}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
-            <input
-              type="date"
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
+            <input type="text" placeholder="Search patient..." value={filterPatient} onChange={(e) => setFilterPatient(e.target.value)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+            <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
             <div className="flex gap-2">
-              <input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={clearFilters}
-                title="Clear Filters"
-                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition"
-              >
-                ✕
-              </button>
+              <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+              <button onClick={clearFilters} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg">✕</button>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="py-32 flex justify-center">
-            <Loader />
-          </div>
+          <div className="py-32 flex justify-center"><Loader /></div>
         ) : (
           <>
-            {/* Mobile list */}
+            {/* MOBILE LIST */}
             <div className="grid grid-cols-1 gap-4 md:hidden">
               {appointments.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                  <p>No bookings found matching your filters.</p>
-                </div>
+                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl border border-dashed">No bookings found.</div>
               ) : (
                 appointments.map((app) => (
                   <MobileAppointmentCard
@@ -442,42 +428,22 @@ export default function BookingsPage() {
               )}
             </div>
 
-            {/* Desktop table */}
+            {/* DESKTOP TABLE */}
             <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Patient
-                    </th>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Doctor
-                    </th>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Schedule
-                    </th>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Payment
-                    </th>
-                    <th className="p-5 font-bold text-gray-600 text-xs uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Patient</th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Doctor</th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Schedule</th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Status</th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Payment Info</th>
+                    <th className="p-5 font-bold text-gray-600 text-xs uppercase">Actions</th>
                   </tr>
                 </thead>
-
                 <tbody className="divide-y divide-gray-100">
                   {appointments.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="p-16 text-center text-gray-500 italic bg-gray-50"
-                      >
-                        No bookings found matching your criteria.
-                      </td>
-                    </tr>
+                    <tr><td colSpan="6" className="p-16 text-center text-gray-500 italic bg-gray-50">No bookings found.</td></tr>
                   ) : (
                     appointments.map((app) => (
                       <DesktopAppointmentRow
@@ -494,25 +460,12 @@ export default function BookingsPage() {
               </table>
             </div>
 
+            {/* PAGINATION */}
             {pagination.totalPages > 1 && (
-              <div className="flex justify-between items-center mt-6 p-4 bg-white rounded-xl border border-gray-200 md:mt-0 md:border-t-0 md:rounded-t-none shadow-sm">
-                <button
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600 font-bold">
-                  Page {pagination.page} of {pagination.totalPages}
-                </span>
-                <button
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page === pagination.totalPages}
-                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
-                >
-                  Next
-                </button>
+              <div className="flex justify-between items-center mt-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                <button onClick={() => handlePageChange(pagination.page - 1)} disabled={pagination.page === 1} className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                <span className="text-sm font-bold">Page {pagination.page} of {pagination.totalPages}</span>
+                <button onClick={() => handlePageChange(pagination.page + 1)} disabled={pagination.page === pagination.totalPages} className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50">Next</button>
               </div>
             )}
           </>
@@ -522,226 +475,129 @@ export default function BookingsPage() {
   );
 }
 
-// ---------- Sub components ----------
+// --- SUB COMPONENTS ---
 
 const StatusBadge = ({ status }) => {
-  let colors = "bg-gray-100 text-gray-600 border-gray-200";
-  if (status === "CONFIRMED") colors = "bg-green-100 text-green-700 border-green-200";
-  if (status === "PENDING") colors = "bg-yellow-100 text-yellow-700 border-yellow-200";
-  if (status === "CANCELLED") colors = "bg-red-50 text-red-600 border-red-100";
-  if (status === "COMPLETED") colors = "bg-blue-50 text-blue-600 border-blue-100";
-  if (status === "NO_SHOW") colors = "bg-orange-50 text-orange-700 border-orange-200";
-  if (status === "CANCEL_REQUESTED")
-    colors = "bg-purple-50 text-purple-700 border-purple-200";
-
-  return (
-    <span
-      className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold border ${colors}`}
-    >
-      {status}
-    </span>
-  );
+  const styles = {
+    CONFIRMED: "bg-green-100 text-green-700 border-green-200",
+    PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    CANCELLED: "bg-red-50 text-red-600 border-red-100",
+    COMPLETED: "bg-blue-50 text-blue-600 border-blue-100",
+    NO_SHOW: "bg-orange-50 text-orange-700 border-orange-200",
+    default: "bg-gray-100 text-gray-600 border-gray-200"
+  };
+  return <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${styles[status] || styles.default}`}>{status}</span>;
 };
 
-const ActionButtons = ({ app, onUpdate }) => {
-  return (
-    <div className="flex gap-2">
-      {app.status === "PENDING" && (
-        <>
-          <button
-            onClick={() => onUpdate(app.id, "CONFIRMED")}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95"
-          >
-            Approve
-          </button>
-          <button
-            onClick={() => onUpdate(app.id, "CANCELLED")}
-            className="flex-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-sm"
-          >
-            Reject
-          </button>
-        </>
-      )}
-
-      {app.status === "CONFIRMED" && (
-        <>
-          <button
-            onClick={() => onUpdate(app.id, "COMPLETED")}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95"
-          >
-            Mark Complete
-          </button>
-          <button
-            onClick={() => onUpdate(app.id, "NO_SHOW")}
-            className="flex-1 bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95"
-          >
-            Mark No‑Show
-          </button>
-        </>
-      )}
-    </div>
-  );
-};
-
-const MobileAppointmentCard = ({
-  app,
-  onUpdate,
-  isRescheduled,
-  canShowMarkAsRead,
-  onMarkAsRead,
-}) => (
-  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-    <div className="flex justify-between items-start mb-4">
-      <div>
-        <h3 className="font-bold text-gray-900 text-lg">{app.patientName}</h3>
-        <p className="text-sm text-gray-500">{app.patientPhone}</p>
-      </div>
-      <div className="text-right">
-        <StatusBadge status={app.status} />
-        <CancelMeta app={app} />
-      </div>
-    </div>
-
-    <div className="space-y-3 text-sm text-gray-700 border-t border-b border-gray-100 py-4 my-4">
-      <div className="flex items-center gap-3">
-        <span className="text-lg">👨‍⚕️</span>
-        <div>
-          <span className="font-bold text-gray-900 block">
-            {app.doctorName}
-          </span>
-          <span className="text-xs text-blue-600">
-            {app.doctorSpecialization || "Unknown"}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="text-lg">🕒</span>
-        <div>
-          <span className="font-medium block">{app.dateFormatted}</span>
-          <span className="text-xs text-gray-500 font-mono">
-            {app.timeFormatted}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="text-lg">💰</span>
-        <div className="text-xs text-gray-700">
-          <span className="font-semibold">{getPaymentSummary(app)}</span>
-          {app.adminNote && (
-            <div className="mt-0.5 text-[11px] text-gray-500 italic">
-              {app.adminNote}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {isRescheduled && (
-        <span className="inline-block mt-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded w-max font-bold">
-          ⚠️ Rescheduled
-        </span>
-      )}
-    </div>
-
-    {["PENDING", "CONFIRMED"].includes(app.status) ? (
-      <ActionButtons app={app} onUpdate={onUpdate} />
-    ) : canShowMarkAsRead(app) ? (
-      <button
-        type="button"
-        onClick={() => onMarkAsRead(app)}
-        className="w-full bg-gray-900 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-xs font-bold"
-      >
-        Mark as read
-      </button>
-    ) : (
-      <p className="text-xs text-center text-gray-400 italic font-medium">
-        No actions available
-      </p>
+const ActionButtons = ({ app, onUpdate }) => (
+  <div className="flex gap-2">
+    {app.status === "PENDING" && (
+      <>
+        <button onClick={() => onUpdate(app.id, "CONFIRMED")} className="flex-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700">Approve</button>
+        <button onClick={() => onUpdate(app.id, "CANCELLED")} className="flex-1 border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-50">Reject</button>
+      </>
+    )}
+    {app.status === "CONFIRMED" && (
+      <>
+        <button onClick={() => onUpdate(app.id, "COMPLETED")} className="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700">Complete</button>
+        <button onClick={() => onUpdate(app.id, "NO_SHOW")} className="flex-1 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-50">No-Show</button>
+      </>
     )}
   </div>
 );
 
-const DesktopAppointmentRow = ({
-  app,
-  onUpdate,
-  isRescheduled,
-  canShowMarkAsRead,
-  onMarkAsRead,
-}) => (
-  <tr className="hover:bg-blue-50/30 transition-colors">
-    <td className="p-5">
-      <div className="font-bold text-gray-900">{app.patientName}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{app.patientPhone}</div>
-      <Link
-        to={`/admin/patients/${app.userId}/history`}
-        className="mt-1 inline-block text-[11px] text-blue-600 font-semibold hover:underline"
-      >
-        View history
-      </Link>
-    </td>
-
-    <td className="p-5">
-      <div className="text-gray-900 text-sm font-bold">{app.doctorName}</div>
-      <div className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-max mt-1 font-medium">
-        {app.doctorSpecialization || "Unknown"}
-      </div>
-    </td>
-
-    <td className="p-5">
-      <div className="font-medium text-gray-900 text-sm">
-        {app.dateFormatted}
-      </div>
-      <div className="text-xs text-gray-500 font-mono mt-0.5">
-        {app.timeFormatted}
-      </div>
-
-      {isRescheduled && (
-        <span className="block mt-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded w-max font-bold">
-          ⚠️ Rescheduled
-        </span>
-      )}
-    </td>
-
-    <td className="p-5">
-      <StatusBadge status={app.status} />
-      <CancelMeta app={app} />
-    </td>
-
-    {/* Payment column */}
-    <td className="p-5 align-top">
-      <div className="text-xs font-semibold text-gray-800">
-        {getPaymentSummary(app)}
-      </div>
-      {app.adminNote && (
-        <div className="mt-1 text-[11px] text-gray-500 italic">
-          {app.adminNote}
+const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => {
+  const relativeDate = getRelativeDateLabel(app.slot?.date || app.date);
+  
+  return (
+    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="font-bold text-gray-900 text-lg">{app.patientName}</h3>
+          <p className="text-sm text-gray-500">{app.patientPhone}</p>
         </div>
-      )}
-    </td>
-
-    <td className="p-5">
-      <div className="w-44">
-        {["PENDING", "CONFIRMED"].includes(app.status) ? (
-          <ActionButtons app={app} onUpdate={onUpdate} />
-        ) : canShowMarkAsRead(app) ? (
-          <button
-            type="button"
-            onClick={() => onMarkAsRead(app)}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white hover:bg-gray-800 transition"
-          >
-            Mark as read
-          </button>
-        ) : (
-          <span className="text-xs text-gray-400 font-bold uppercase tracking-wide">
-            {app.status === "NO_SHOW"
-              ? "No‑Show"
-              : app.status === "CANCELLED"
-              ? "Cancelled"
-              : "Completed"}
-          </span>
-        )}
+        <div className="text-right">
+          <StatusBadge status={app.status} />
+          <CancelMeta app={app} />
+        </div>
       </div>
-    </td>
-  </tr>
-);
+      <div className="space-y-3 text-sm text-gray-700 border-t border-b border-gray-100 py-4 my-4">
+        <div className="flex items-center gap-3">
+          <span>👨‍⚕️</span>
+          <div><span className="font-bold block">{app.doctorName}</span><span className="text-xs text-blue-600">{app.doctorSpecialization}</span></div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>🕒</span>
+          <div>
+            <div className="flex items-center gap-2">
+              {relativeDate && <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 rounded uppercase">{relativeDate}</span>}
+              <span className="font-medium">{app.dateFormatted}</span>
+            </div>
+            <span className="text-xs text-gray-500 block">{app.timeFormatted}</span>
+            <span className="text-[10px] text-gray-400 block mt-1">Booked: {formatCreatedDate(app.createdAt)}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>💰</span>
+          <div className="text-xs">{getPaymentSummary(app)}
+            {app.adminNote && <div className="mt-0.5 text-[10px] text-gray-500 italic">{app.adminNote}</div>}
+          </div>
+        </div>
+        {isRescheduled && <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 px-1.5 rounded font-bold">⚠️ Rescheduled</span>}
+      </div>
+      {["PENDING", "CONFIRMED"].includes(app.status) ? <ActionButtons app={app} onUpdate={onUpdate} /> : canShowMarkAsRead(app) ? <button onClick={() => onMarkAsRead(app)} className="w-full bg-gray-900 text-white px-3 py-2 rounded-lg text-xs font-bold">Mark as read</button> : null}
+    </div>
+  );
+};
+
+const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => {
+  // Calculate relative date label (Today, Tomorrow)
+  const relativeDate = getRelativeDateLabel(app.slot?.date || app.date);
+
+  return (
+    <tr className="hover:bg-gray-50 transition-colors">
+      <td className="p-5">
+        <div className="font-bold text-gray-900">{app.patientName}</div>
+        <div className="text-xs text-gray-500">{app.patientPhone}</div>
+        <Link to={`/admin/patients/${app.userId}/history`} className="mt-1 inline-block text-[11px] text-blue-600 font-semibold hover:underline">View history</Link>
+      </td>
+      <td className="p-5">
+        <div className="text-gray-900 text-sm font-bold">{app.doctorName}</div>
+        <div className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-max mt-1">{app.doctorSpecialization}</div>
+      </td>
+      <td className="p-5">
+        {/* 🔥 NEW: DATE DISPLAY LOGIC */}
+        <div className="flex items-center gap-2 mb-0.5">
+           {relativeDate && (
+             <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase tracking-wide">
+               {relativeDate}
+             </span>
+           )}
+        </div>
+        <div className="font-bold text-gray-900 text-sm">
+          {app.dateFormatted}
+        </div>
+        <div className="text-xs text-gray-600 font-mono">
+          {app.timeFormatted}
+        </div>
+        
+        {/* Booked On */}
+        <div className="mt-1.5 text-[10px] text-gray-400 font-medium">
+           Booked: {formatCreatedDate(app.createdAt)}
+        </div>
+
+        {isRescheduled && <span className="block mt-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded w-max font-bold">⚠️ Rescheduled</span>}
+      </td>
+      <td className="p-5"><StatusBadge status={app.status} /><CancelMeta app={app} /></td>
+      <td className="p-5 align-top">
+        <div className="text-xs font-semibold text-gray-800">{getPaymentSummary(app)}</div>
+        {app.adminNote && <div className="mt-1 text-[11px] text-gray-500 italic">{app.adminNote}</div>}
+      </td>
+      <td className="p-5">
+        <div className="w-44">
+          {["PENDING", "CONFIRMED"].includes(app.status) ? <ActionButtons app={app} onUpdate={onUpdate} /> : canShowMarkAsRead(app) ? <button onClick={() => onMarkAsRead(app)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white">Mark as read</button> : <span className="text-xs text-gray-400 font-bold uppercase">{app.status.replace('_', ' ')}</span>}
+        </div>
+      </td>
+    </tr>
+  );
+};

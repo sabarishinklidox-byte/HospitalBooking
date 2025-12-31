@@ -29,14 +29,14 @@ export default function Navbar() {
           
           {/* LEFT: LOGO */}
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 cursor-pointer group">
+           
               <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0055aa] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md group-hover:shadow-lg transition-all duration-300">
                 D
               </div>
               <span className="text-2xl font-bold text-[#003366] tracking-tight hidden sm:block group-hover:text-[#0055aa] transition-colors">
                 DocBook
               </span>
-            </Link>
+           
           </div>
 
           {/* CENTER: DESKTOP NAVIGATION */}

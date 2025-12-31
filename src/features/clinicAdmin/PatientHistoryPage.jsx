@@ -40,7 +40,6 @@ export default function PatientHistoryPage() {
 
   useEffect(() => {
     fetchHistory(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const formatDateTime = (isoString, type = 'full') => {
@@ -68,6 +67,13 @@ export default function PatientHistoryPage() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  // 🔥 FIXED: Convert paise to rupees
+  const formatRupees = (amount) => {
+    if (!amount) return '₹0';
+    const rupees = Number(amount) / 100;
+    return `₹${rupees.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
   };
 
   return (
@@ -121,10 +127,7 @@ export default function PatientHistoryPage() {
                       <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
-                      <a
-                        href={`tel:${patient.phone}`}
-                        className="text-blue-600 hover:underline font-medium"
-                      >
+                      <a href={`tel:${patient.phone}`} className="text-blue-600 hover:underline font-medium">
                         {patient.phone}
                       </a>
                     </div>
@@ -156,7 +159,7 @@ export default function PatientHistoryPage() {
                           <th className="px-6 py-3 font-semibold text-gray-600">Doctor</th>
                           <th className="px-6 py-3 font-semibold text-gray-600">Clinic</th>
                           <th className="px-6 py-3 font-semibold text-gray-600">Status</th>
-                          <th className="px-6 py-3 font-semibold text-gray-600">Payment</th>
+                          <th className="px-6 py-3 font-semibold text-gray-600">Payment History</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -183,9 +186,7 @@ export default function PatientHistoryPage() {
                                   {a.doctor?.name || 'Unknown Doctor'}
                                 </div>
                                 <div className="text-xs text-gray-500 uppercase tracking-wide mt-0.5">
-                                  {a.doctor?.speciality?.name ||
-                                    a.doctor?.speciality ||
-                                    'Unknown'}
+                                  {a.doctor?.speciality?.name || a.doctor?.speciality || 'Unknown'}
                                 </div>
                               </td>
 
@@ -209,109 +210,87 @@ export default function PatientHistoryPage() {
                                 </span>
                               </td>
 
-                              {/* Payment */}
-                              <td className="px-6 py-4 text-gray-600 text-xs">
+                              {/* 🔥 PERFECT Payment History */}
+                              <td className="px-6 py-4 text-xs max-w-[200px]">
                                 {(() => {
-                                  const payment = a.payment;
-
-                                  const booked = Number(
-                                    a.bookedAmount ??
-                                    a.slot?.price ??
-                                    payment?.amount ??
-                                    0
-                                  );
-                                  const total = Number(a.amount ?? booked);
-
-                                  // use backend paidAmount only
-                                  const paid = Number(a.paidAmount ?? 0);
-
-                                  const refunded = Number(a.refundedAmount ?? 0);
-
-                                  let pending = Number(
-                                    a.pendingAmount ??
-                                    Math.max(total - paid + refunded, 0)
-                                  );
-
-                                  const mode =
-                                    a.paymentMode || a.slot?.paymentMode || 'OFFLINE';
-
-                                  // trust backend paymentStatus first
-                                  let status = a.paymentStatus || payment?.status || 'PENDING';
-
-                                  // completed + fully paid safety net
-                                  if (a.status === 'COMPLETED' && paid >= total && total > 0) {
-                                    status = 'PAID';
-                                    pending = 0;
+                                  // 🔥 1. Reschedule actions (MOST IMPORTANT)
+                                  if (a.financialStatus && a.financialStatus !== 'NO_CHANGE') {
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="font-semibold text-sm">
+                                          {a.financialStatus === 'PAY_AT_CLINIC' && (
+                                            <span className="text-blue-600">💰 Collect {formatRupees(a.diffAmount || a.amount)}</span>
+                                          )}
+                                          {a.financialStatus === 'PAY_DIFFERENCE_OFFLINE' && (
+                                            <span className="text-blue-600">💰 Pay {formatRupees(a.diffAmount)} more</span>
+                                          )}
+                                          {a.financialStatus === 'PAY_DIFFERENCE' && (
+                                            <span className="text-blue-600">💳 Pay {formatRupees(a.diffAmount)} online</span>
+                                          )}
+                                          {a.financialStatus === 'FULL_REFUND' && (
+                                            <span className="text-orange-600">💸 Refund FULL {formatRupees(a.diffAmount)}</span>
+                                          )}
+                                          {a.financialStatus === 'REFUND_AT_CLINIC' && (
+                                            <span className="text-orange-600">💸 Refund {formatRupees(a.diffAmount)}</span>
+                                          )}
+                                          {a.financialStatus === 'FREE_SLOT' && (
+                                            <span className="text-green-600">🎁 Free slot</span>
+                                          )}
+                                        </div>
+                                        {a.adminNote && (
+                                          <div className="text-[10px] text-gray-500 italic line-clamp-2">
+                                            {a.adminNote}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
                                   }
 
-                                  if (!booked && !paid && !pending && !refunded) {
-                                    return <span className="text-gray-400">—</span>;
+                                  // 🔥 2. Regular booking summary
+                                  const amount = Number(a.amount || a.slot?.price || 0);
+                                  const paidAmount = Number(a.paidAmount || 0);
+                                  const refundedAmount = Number(a.refundedAmount || 0);
+                                  const paymentStatus = a.paymentStatus || 'PENDING';
+                                  const mode = a.slot?.paymentMode || 'OFFLINE';
+
+                                  if (amount === 0) {
+                                    return <span className="text-green-600 font-semibold">Free</span>;
                                   }
 
-                                  let headline = '';
-                                  let color = 'text-gray-600';
-
-                                  if (status === 'PAID' && pending === 0) {
-                                    headline = `Paid ₹${paid || total} (${mode})`;
-                                    color = 'text-green-600';
-                                  } else if (status === 'REFUNDED') {
-                                    headline = `Refunded ₹${refunded || paid || total} (${mode})`;
-                                    color = 'text-orange-600';
-                                  } else if (status === 'CANCELLED') {
-                                    headline = `Cancelled payment ₹${booked || total} (${mode})`;
-                                    color = 'text-red-500';
-                                  } else if (paid > 0 && pending > 0) {
-                                    headline = `Paid ₹${paid}, pending ₹${pending} (${mode})`;
-                                    color = 'text-amber-600';
-                                  } else {
-                                    headline = `Pending ₹${pending || total} (${mode})`;
-                                    color = 'text-gray-500';
-                                  }
-
+                                  // 🔥 3. COMPLETE PAYMENT BREAKDOWN
                                   return (
-                                    <div className="space-y-0.5">
-                                      <div className={`font-semibold ${color}`}>
-                                        {headline}
+                                    <div className="space-y-1">
+                                      {/* Headline */}
+                                      <div className={`font-semibold text-sm ${
+                                        paymentStatus === 'PAID' ? 'text-green-600' :
+                                        paymentStatus === 'REFUNDED' ? 'text-orange-600' :
+                                        'text-gray-600'
+                                      }`}>
+                                        {paymentStatus === 'PAID' && `Paid ${formatRupees(paidAmount || amount)}`}
+                                        {paymentStatus === 'REFUNDED' && `Refunded ${formatRupees(refundedAmount || paidAmount)}`}
+                                        {paymentStatus === 'PENDING' && `Pending ${formatRupees(amount)}`}
+                                        {paymentStatus === 'PAID' && paidAmount < amount && (
+                                          <span className="text-amber-600 ml-1">
+                                            (+{formatRupees(amount - paidAmount)} pending)
+                                          </span>
+                                        )}
+                                        <span className="text-gray-500 ml-1">({mode})</span>
                                       </div>
 
-                                      <div className="text-[11px] text-gray-500">
-                                        Booked:{' '}
-                                        <span className="font-semibold text-gray-800">
-                                          ₹{booked || total}
-                                        </span>
-
-                                        {paid > 0 && (
-                                          <>
-                                            {' '}· Paid:{' '}
-                                            <span className="font-semibold text-green-700">
-                                              ₹{paid}
-                                            </span>
-                                          </>
-                                        )}
-
-                                        {refunded > 0 && (
-                                          <>
-                                            {' '}· Refunded:{' '}
-                                            <span className="font-semibold text-orange-700">
-                                              ₹{refunded}
-                                            </span>
-                                          </>
-                                        )}
-
-                                        {pending > 0 && status !== 'CANCELLED' && (
-                                          <>
-                                            {' '}· Remaining:{' '}
-                                            <span className="font-semibold text-amber-700">
-                                              ₹{pending}
-                                            </span>
-                                          </>
-                                        )}
-                                      </div>
-
+                                      {/* Breakdown */}
+                                      {paidAmount > 0 && (
+                                        <div className="text-[10px] text-gray-500">
+                                          Paid: <span className="font-semibold text-green-700">{formatRupees(paidAmount)}</span>
+                                        </div>
+                                      )}
+                                      {refundedAmount > 0 && (
+                                        <div className="text-[10px] text-gray-500">
+                                          Refunded: <span className="font-semibold text-orange-700">{formatRupees(refundedAmount)}</span>
+                                        </div>
+                                      )}
                                       {a.paymentUpdatedAt && (
                                         <div className="text-[10px] text-gray-400">
-                                          Last payment update:{' '}
-                                          {formatDateTime(a.paymentUpdatedAt)}
+                                          {formatDateTime(a.paymentUpdatedAt, 'date')}
                                         </div>
                                       )}
                                     </div>
@@ -329,8 +308,7 @@ export default function PatientHistoryPage() {
                   {pagination && (
                     <div className="px-6 py-3 flex items-center justify-between border-t border-gray-100 text-xs text-gray-600">
                       <span>
-                        Page {pagination.page} of {pagination.totalPages} ·{' '}
-                        {pagination.totalCount} records
+                        Page {pagination.page} of {pagination.totalPages} · {pagination.totalCount} records
                       </span>
                       <div className="space-x-2">
                         <button

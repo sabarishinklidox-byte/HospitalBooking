@@ -394,36 +394,62 @@ const openRazorpayForExistingHold = (holdData) => {
               email: user?.email,
               contact: user?.phone,
           },
-          handler: async function (response) {
-            try {
-                const verifyToast = toast.loading("Verifying payment...");
-                await api.post(VERIFY_RAZORPAY_URL, {
-                    provider: "RAZORPAY",
-                    clinic_id: doctor.clinic.id || selectedSlot.clinicId,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
-                    notes: {
-                        type: rescheduleFromId ? "RESCHEDULE" : "BOOKING",
-                        appointmentId: responseData.appointmentId,
-                        slotId: selectedSlot.id,
-                        amount: responseData.amount
-                    }
-                });
-                toast.dismiss(verifyToast);
-                stopHoldTimer();
-                setHold(null);
-                toast.success(rescheduleFromId ? 'Reschedule Confirmed' : 'Appointment Confirmed');
-                navigate('/my-appointments');
-            } catch (e) {
-                toast.dismiss();
-                console.error(e);
-                toast.error('Payment verified failed. Contact support.');
-                navigate('/my-appointments');
-            }
-          },
-          theme: { color: '#0b3b5e' },
-        };
+         handler: async function (response) {
+  try {
+    const verifyToast = toast.loading("Verifying payment...");
+    
+    // 🔥 SAFE VALUES (from hold state, not volatile selectedSlot)
+    const safeAppointmentId = hold?.appointmentId || responseData.appointmentId;
+    const safeSlotId = hold?.slotId || selectedSlot?.id;
+    const safeClinicId = doctor?.clinic?.id || selectedSlot?.clinicId;
+    
+    // 🔥 VALIDATION
+    if (!safeAppointmentId) {
+      throw new Error('Missing appointmentId');
+    }
+    
+    await api.post(VERIFY_RAZORPAY_URL, {
+      appointmentId: safeAppointmentId,  // ✅ Primary field (backend expects this)
+      razorpay_order_id: response.razorpay_order_id,
+      razorpay_payment_id: response.razorpay_payment_id,
+      razorpay_signature: response.razorpay_signature,
+      notes: {
+        type: rescheduleFromId ? "RESCHEDULE" : "BOOKING",
+        appointmentId: safeAppointmentId,  // ✅ Duplicate for safety
+        slotId: safeSlotId,                // ✅ Safe (can be null for reschedule)
+        clinicId: safeClinicId,
+        amount: responseData.amount
+      }
+    });
+    
+    toast.dismiss(verifyToast);
+    stopHoldTimer();
+    setHold(null);
+    toast.success(rescheduleFromId ? 'Reschedule Confirmed!' : 'Booking Confirmed!');
+    
+    // Small delay for backend processing
+    setTimeout(() => {
+      navigate('/my-appointments');
+    }, 500);
+    
+  } catch (e) {
+    toast.dismiss();
+    console.error('❌ Payment handler error:', e);
+    
+    // User-friendly message
+    toast.error(
+      'Payment received but verification pending. Check "My Appointments" in 30 seconds.',
+      { duration: 8000 }
+    );
+    
+    // Still navigate - webhook will complete
+    setTimeout(() => {
+      navigate('/my-appointments');
+    }, 2000);
+  }
+},
+theme: { color: '#0b3b5e' },
+        }
 
         const rzp = new window.Razorpay(options);
         rzp.open();

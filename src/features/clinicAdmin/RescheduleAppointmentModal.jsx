@@ -89,9 +89,24 @@ export default function RescheduleAppointmentModal({
     fetchSlots(newFrom);
   };
 
+  // 🔥 FIXED: Complete slot selection with TIME!
+  const handleSlotSelect = (slot, dayDate) => {
+    setSelectedSlot({
+      slotId: slot.slotId,
+      time: slot.time || slot.timeLabel,        // ✅ CRITICAL FIX!
+      timeLabel: slot.timeLabel,
+      date: dayDate,
+      priceDisplay: slot.priceDisplay,
+      slotType: slot.slotType,
+      period: slot.period,
+      isBooked: slot.isBooked
+    });
+    setSelectedDate(dayDate);
+  };
+
   const handleConfirm = async () => {
-    if (!selectedDate || !selectedSlot) {
-      setError("Please select a new time slot.");
+    if (!selectedDate || !selectedSlot?.slotId || !selectedSlot.time) {
+      setError("Please select a valid time slot.");
       return;
     }
 
@@ -104,46 +119,55 @@ export default function RescheduleAppointmentModal({
       setSaving(true);
       setError("");
 
+      console.log('🚀 Rescheduling to:', {
+        newSlotId: selectedSlot.slotId,
+        newDate: selectedDate,
+        newTime: selectedSlot.time,      // ✅ NOW GUARANTEED!
+        note,
+        deleteOldSlot
+      });
+
       const res = await api.patch(
         `${ENDPOINTS.ADMIN.APPOINTMENT_BY_ID(appointment.id)}/reschedule`,
         {
-          newSlotId: selectedSlot.slotId,  // 🔥 FIXED: Use slotId not date/time
+          newSlotId: selectedSlot.slotId,
+          newDate: selectedDate,
+          newTime: selectedSlot.time,      // ✅ FIXED!
           note,
           deleteOldSlot,
         }
       );
 
-      // 🟧 Handle Financial Alerts Logic
+      // Handle financial alerts
       const status = res.data?.financialStatus;
-      const adminAlert = res.data?.adminAlert;
+      const adminAlert = res.data?.adminNote || res.data?.financialAction;
 
-      if (status === 'PAY_DIFFERENCE') {
+      if (status === 'PAY_DIFFERENCE' || status === 'PAY_DIFFERENCE_OFFLINE') {
         toast((t) => (
-          <div>⚠️ <b>Collect Payment!</b><br/>{adminAlert}</div>
-        ), { duration: 6000, icon: '💰' });
-      } else if (status === 'REFUND_AT_CLINIC') {
+          <div className="text-sm">⚠️ <b>Collect Payment!</b><br/>{adminAlert}</div>
+        ), { duration: 8000, icon: '💰' });
+      } else if (status === 'REFUND_AT_CLINIC' || status === 'FULL_REFUND') {
         toast((t) => (
-          <div>ℹ️ <b>Refund Due!</b><br/>{adminAlert}</div>
-        ), { duration: 6000, icon: '💸' });
+          <div className="text-sm">ℹ️ <b>Refund Required!</b><br/>{adminAlert}</div>
+        ), { duration: 8000, icon: '💸' });
+      } else if (status === 'FREE_SLOT') {
+        toast.success("✅ Rescheduled to FREE slot!");
       } else {
-        toast.success("Rescheduled successfully");
+        toast.success("✅ Rescheduled successfully!");
       }
 
       onRescheduled?.(res.data?.appointment);
       onClose();
     } catch (err) {
-      console.error("Reschedule failed", err);
-      setError(
-        err?.response?.data?.error || "Failed to reschedule appointment."
-      );
+      console.error("❌ Reschedule failed", err);
+      setError(err?.response?.data?.error || "Failed to reschedule appointment.");
     } finally {
       setSaving(false);
     }
   };
 
   const periods = ["Morning", "Afternoon", "Evening"];
-  const dayObj =
-    slotsByDay.find((d) => d.date === selectedDate) || { slots: [] };
+  const dayObj = slotsByDay.find((d) => d.date === selectedDate) || { slots: [] };
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -267,13 +291,15 @@ export default function RescheduleAppointmentModal({
 
                         return (
                           <button
-                            key={slot.slotId}
-                            type="button"
-                            disabled={booked || loadingSlots}
-                            onClick={() =>
-                              !booked &&
-                              setSelectedSlot({ ...slot, date: dayObj.date })
-                            }
+  key={slot.slotId}
+  type="button"
+  disabled={booked || loadingSlots}
+  onClick={() => !booked && setSelectedSlot({
+    slotId: slot.slotId,
+    time: slot.timeLabel,           // 🔥 CRITICAL!
+    timeLabel: slot.timeLabel,
+    date: dayObj.date
+  })}
                             className={clsx(
                               "px-4 py-3 rounded-lg border-2 text-sm min-w-[120px] transition-all flex flex-col items-center gap-1 shadow-sm",
                               booked
