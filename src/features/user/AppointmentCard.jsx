@@ -300,9 +300,25 @@ export default function AppointmentCard({ app, onReschedule, onReview, onCancel 
               {statusStyles.label}
             </span>
 
+            {/* 🔥 NEW: Cancellation status messages */}
             {app.status === "CANCEL_REQUESTED" && (
               <p className="mt-1 text-xs text-orange-600 font-medium">
                 Cancellation requested. Waiting for clinic approval.
+              </p>
+            )}
+
+            {/* 🔥 NEW: Admin approved + refunded */}
+            {app.status === "CANCELLED" && app.cancelledBy === "ADMIN" && app.paymentStatus === "REFUNDED" && (
+              <p className="mt-1 text-xs text-green-700 font-medium bg-green-50 px-2 py-1 rounded-sm border border-green-200">
+                Refund initiated. 5–7 working days to reflect.
+              </p>
+            )}
+
+            {/* 🔥 NEW: Cancellation request rejected */}
+            {app.cancellationRequest?.status === "REJECTED" && (
+              <p className="mt-1 text-xs text-red-700 font-medium bg-red-50 px-2 py-1 rounded-sm border border-red-200">
+                Cancellation rejected by clinic.
+                {app.cancellationRequest?.reason && ` ${app.cancellationRequest.reason}`}
               </p>
             )}
           </div>

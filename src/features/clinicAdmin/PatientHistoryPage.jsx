@@ -70,11 +70,13 @@ export default function PatientHistoryPage() {
   };
 
   // 🔥 FIXED: Convert paise to rupees
-  const formatRupees = (amount) => {
+ const formatRupees = (amount) => {
+    // Backend sends actual Rupees (e.g., 500)
+    // So we just format the number directly.
     if (!amount) return '₹0';
-    const rupees = Number(amount) / 100;
-    return `₹${rupees.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-  };
+    return `₹${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
+
 
   return (
     <ClinicAdminLayout>

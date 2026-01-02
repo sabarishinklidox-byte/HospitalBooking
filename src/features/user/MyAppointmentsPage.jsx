@@ -197,7 +197,7 @@ export default function MyAppointmentsPage() {
             clinicId, 
             doctorId, 
             date: newDate,
-            excludeAppointmentId: selectedAppt.id  // ✅ FIXED: Exclude CURRENT appointment
+            excludeAppointmentId: selectedAppt.id
           },
         });
 
@@ -216,134 +216,118 @@ export default function MyAppointmentsPage() {
 
   const currentSlotId = useMemo(() => selectedAppt?.slot?.id ?? null, [selectedAppt]);
 
-  // ✅ FIXED: Handle ALL reschedule responses correctly
-// 🔥 REPLACE handleRescheduleSubmit function (around line 220)
-const handleRescheduleSubmit = async () => {
-  if (!selectedNewSlotId) {
-    toast.error("Please select a new slot");
-    return;
-  }
+  const handleRescheduleSubmit = async () => {
+    if (!selectedNewSlotId) {
+      toast.error("Please select a new slot");
+      return;
+    }
 
-  try {
-    const loadingToast = toast.loading("Processing reschedule...");
-    
-    const res = await api.patch(
-      ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id),
-      {
-        appointmentId: selectedAppt.id,
-        newSlotId: selectedNewSlotId,
-        provider: "RAZORPAY", 
-      }
-    );
-
-    toast.dismiss(loadingToast);
-    const apiResponse = res.data;
-    
-    // 🔥 CRITICAL DEBUG LOG
-    console.log('🔥 FULL RESCHEDULE RESPONSE:', JSON.stringify(apiResponse, null, 2));
-
-    // === SCENARIO A: PAYMENT REQUIRED ===
-    if (apiResponse.status === "PAYMENT_REQUIRED") {
-      console.log('✅ PAYMENT_REQUIRED → Opening Razorpay');
+    try {
+      const loadingToast = toast.loading("Processing reschedule...");
       
-      setRescheduleModalOpen(false);
-      const responseData = apiResponse.data;
-      
-      const backendExpiry = responseData.paymentExpiry || responseData.expiresAt;
-      const expiresAtMs = backendExpiry 
-        ? new Date(backendExpiry).getTime()
-        : Date.now() + (responseData.expiresIn || 600) * 1000;
+      const res = await api.patch(
+        ENDPOINTS.USER.RESCHEDULE_APPOINTMENT(selectedAppt.id),
+        {
+          appointmentId: selectedAppt.id,
+          newSlotId: selectedNewSlotId,
+          provider: "RAZORPAY", 
+        }
+      );
 
-      if (expiresAtMs <= Date.now()) {
-        toast.error('Payment session expired. Please try again.');
+      toast.dismiss(loadingToast);
+      const apiResponse = res.data;
+      
+      // === SCENARIO A: PAYMENT REQUIRED ===
+      if (apiResponse.status === "PAYMENT_REQUIRED") {
+        setRescheduleModalOpen(false);
+        const responseData = apiResponse.data;
+        const backendExpiry = responseData.paymentExpiry || responseData.expiresAt;
+        const expiresAtMs = backendExpiry 
+          ? new Date(backendExpiry).getTime()
+          : Date.now() + (responseData.expiresIn || 600) * 1000;
+
+        if (expiresAtMs <= Date.now()) {
+          toast.error('Payment session expired. Please try again.');
+          return;
+        }
+
+        const holdData = {
+          appointmentId: responseData.appointmentId,
+          key: responseData.key,
+          amount: responseData.amount,
+          orderId: responseData.orderId,
+          slotId: selectedNewSlotId,
+          clinicId: getClinicId(selectedAppt),
+          expiresAtMs,
+          isReschedule: true
+        };
+
+        setHold(holdData);
+        startHoldTimer(expiresAtMs);
+        triggerPayment(holdData);
         return;
       }
 
-      const holdData = {
-        appointmentId: responseData.appointmentId,
-        key: responseData.key,
-        amount: responseData.amount,
-        orderId: responseData.orderId,
-        slotId: selectedNewSlotId,
-        clinicId: getClinicId(selectedAppt),
-        expiresAtMs,
-        isReschedule: true
-      };
+      // === SCENARIO B: CLINIC PAYMENT ===
+      if (apiResponse.status === "CLINIC_PAYMENT") {
+        toast.success(`✅ Rescheduled! Pay ₹${apiResponse.data.amount} at clinic`);
+        setRescheduleModalOpen(false);
+        fetchAppointments();
+        return;
+      }
 
-      console.log('🔥 HOLD DATA:', holdData);
-      setHold(holdData);
-      startHoldTimer(expiresAtMs);
-      triggerPayment(holdData);
-      return;
-    }
-
-    // === SCENARIO B: CLINIC PAYMENT ===
-    if (apiResponse.status === "CLINIC_PAYMENT") {
-      console.log('ℹ️ CLINIC_PAYMENT');
-      toast.success(`✅ Rescheduled! Pay ₹${apiResponse.data.amount} at clinic`);
+      // === SCENARIO C: SUCCESS ===
+      toast.success("✅ Rescheduled successfully!");
       setRescheduleModalOpen(false);
       fetchAppointments();
-      return;
+
+    } catch (err) {
+      toast.dismiss();
+      console.error('❌ RESCHEDULE ERROR:', err);
+      const msg = err.response?.data?.error || "Reschedule failed";
+      toast.error(msg);
     }
-
-    // === SCENARIO C: SUCCESS ===
-    toast.success("✅ Rescheduled successfully!");
-    setRescheduleModalOpen(false);
-    fetchAppointments();
-
-  } catch (err) {
-    toast.dismiss();
-    console.error('❌ RESCHEDULE ERROR:', err);
-    const msg = err.response?.data?.error || "Reschedule failed";
-    toast.error(msg);
-  }
-};
-
-// 🔥 REPLACE triggerPayment function
-const triggerPayment = async (paymentData) => {
-  console.log('🚀 TRIGGER PAYMENT:', paymentData);
-  
-  const options = {
-    key: paymentData.key,
-    amount: paymentData.amount,
-    currency: "INR",
-    name: "Clinic Booking - Reschedule",
-    description: "Confirm your new appointment slot",
-    order_id: paymentData.orderId,
-    handler: async function (response) {
-      try {
-        const verifyToast = toast.loading("Verifying payment...");
-        await api.post(ENDPOINTS.PAYMENT.VERIFY_RAZORPAY, {
-          appointmentId: paymentData.appointmentId,
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_signature: response.razorpay_signature,
-          notes: { type: "RESCHEDULE", appointmentId: paymentData.appointmentId }
-        });
-        
-        toast.dismiss(verifyToast);
-        toast.success("✅ Payment confirmed! Appointment rescheduled.");
-        stopHoldTimer();
-        setHold(null);
-        fetchAppointments();
-      } catch (err) {
-        toast.dismiss();
-        toast.error("Payment verification failed. Contact support.");
-      }
-    },
-    prefill: {
-      name: selectedAppt?.user?.name || "",
-      contact: selectedAppt?.user?.phone || "",
-      email: selectedAppt?.user?.email || "",
-    },
-    theme: { color: "#0b3b5e" },
   };
-  
-  console.log('💳 RAZORPAY OPTIONS:', options);
-  await openRazorpay(options);
-};
 
-
+  const triggerPayment = async (paymentData) => {
+    const options = {
+      key: paymentData.key,
+      amount: paymentData.amount,
+      currency: "INR",
+      name: "Clinic Booking - Reschedule",
+      description: "Confirm your new appointment slot",
+      order_id: paymentData.orderId,
+      handler: async function (response) {
+        try {
+          const verifyToast = toast.loading("Verifying payment...");
+          await api.post(ENDPOINTS.PAYMENT.VERIFY_RAZORPAY, {
+            appointmentId: paymentData.appointmentId,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            notes: { type: "RESCHEDULE", appointmentId: paymentData.appointmentId }
+          });
+          
+          toast.dismiss(verifyToast);
+          toast.success("✅ Payment confirmed! Appointment rescheduled.");
+          stopHoldTimer();
+          setHold(null);
+          fetchAppointments();
+        } catch (err) {
+          toast.dismiss();
+          toast.error("Payment verification failed. Contact support.");
+        }
+      },
+      prefill: {
+        name: selectedAppt?.user?.name || "",
+        contact: selectedAppt?.user?.phone || "",
+        email: selectedAppt?.user?.email || "",
+      },
+      theme: { color: "#0b3b5e" },
+    };
+    
+    await openRazorpay(options);
+  };
 
   // ----------------------------------------------------
   // CANCEL & REVIEW
@@ -449,7 +433,8 @@ const triggerPayment = async (paymentData) => {
               value={dateFrom}
               onChange={(e) => { setPage(1); setDateFrom(e.target.value); }}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-            />
+            >
+            </input>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">To</label>
@@ -458,7 +443,8 @@ const triggerPayment = async (paymentData) => {
               value={dateTo}
               onChange={(e) => { setPage(1); setDateTo(e.target.value); }}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-            />
+            >
+            </input>
           </div>
         </div>
 
@@ -473,9 +459,12 @@ const triggerPayment = async (paymentData) => {
                   <AppointmentCard
                     key={app.id}
                     app={app}
-                    onReschedule={openReschedule}
-                    onReview={openReviewModal}
-                    onCancel={handleCancel}
+                    // 🔥 FIXED: Pass 'onReview' only if status is COMPLETED
+                    onReview={app.status === "COMPLETED" ? openReviewModal : undefined}
+                    onReschedule={app.status !== "CANCELLED" && app.status !== "COMPLETED" ? openReschedule : undefined}
+                    onCancel={app.status !== "CANCELLED" && app.status !== "COMPLETED" ? handleCancel : undefined}
+                    // 🔥 FIXED: Visual indicator for status
+                    statusLabel={app.status} 
                   />
                 ))
               )}
@@ -503,7 +492,7 @@ const triggerPayment = async (paymentData) => {
           </>
         )}
 
-        {/* RESCHEDULE MODAL - ✅ FIXED SLOT DISPLAY */}
+        {/* RESCHEDULE MODAL */}
         <Modal
           isOpen={rescheduleModalOpen}
           onClose={() => setRescheduleModalOpen(false)}

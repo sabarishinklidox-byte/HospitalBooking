@@ -91,6 +91,7 @@ export default function Navbar() {
                 {/* 2. Sign Up (Patient) Link - RESTORED ✅ */}
                 <Link 
                   to="/signup" 
+                    state={{ from: location.pathname }} 
                   className="px-3 py-2 text-sm font-bold text-[#003366] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
                 >
                   Sign Up

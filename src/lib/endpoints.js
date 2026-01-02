@@ -39,6 +39,7 @@ PAYMENT: {
   LOGIN: '/admin/login',
   DASHBOARD: '/admin/dashboard',
       SPECIALITIES: '/admin/specialities',
+      CANCELLATION_PROCESS: "/admin/cancellation-process",
     SPECIALITY_BY_ID: (id) => `/admin/specialities/${id}`,
 PATIENT_HISTORY: (userId) => `/admin/patients/${userId}/history`,
   DOCTORS: '/admin/doctors',

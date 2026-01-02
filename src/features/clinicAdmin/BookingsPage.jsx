@@ -202,6 +202,10 @@ export default function BookingsPage() {
           "Unknown",
         doctorName: a.doctorName || a.doctor?.name || "Unknown Doctor",
         patientName: a.patientName || a.patient?.name || "Unknown Patient",
+        // 🔥 NEW MAPPING FOR REQUESTS
+        hasPendingRequest: a.cancellationRequest?.status === 'PENDING',
+        requestReason: a.cancellationRequest?.reason,
+        requestId: a.cancellationRequest?.id
       }));
 
       setAppointments(safeAppointments);
@@ -250,6 +254,30 @@ export default function BookingsPage() {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       fetchAppointments(newPage);
     }
+  };
+
+  // 🔥 NEW: PROCESS REFUND REQUEST (APPROVE/REJECT)
+  const handleProcessRequest = async (app, action) => {
+    if (!app.hasPendingRequest) return;
+    const requestId = app.requestId; 
+    
+    let note = "";
+    if (action === 'REJECT') {
+      note = prompt("Enter reason for rejection:");
+      if (!note) return;
+    } else {
+      if(!window.confirm("Are you sure? This will refund the money and cancel the appointment.")) return;
+    }
+
+    await toast.promise(
+      api.post(ENDPOINTS.ADMIN.CANCELLATION_PROCESS, { requestId, action, adminNote: note }),
+      {
+        loading: "Processing...",
+        success: "Processed successfully!",
+        error: (err) => err?.response?.data?.error || "Failed to process"
+      }
+    );
+    fetchAppointments(pagination.page);
   };
 
   const handleStatusUpdate = async (id, newStatus) => {
@@ -389,6 +417,7 @@ export default function BookingsPage() {
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="CONFIRMED">Confirmed</option>
+              <option value="CANCELLATION_REQUESTED">Refund Requests</option>
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="NO_SHOW">No Show</option>
@@ -423,6 +452,7 @@ export default function BookingsPage() {
                     isRescheduled={isRescheduled(app)}
                     canShowMarkAsRead={canShowMarkAsRead}
                     onMarkAsRead={handleMarkAsRead}
+                    onProcessRequest={handleProcessRequest}
                   />
                 ))
               )}
@@ -453,6 +483,7 @@ export default function BookingsPage() {
                         isRescheduled={isRescheduled(app)}
                         canShowMarkAsRead={canShowMarkAsRead}
                         onMarkAsRead={handleMarkAsRead}
+                        onProcessRequest={handleProcessRequest}
                       />
                     ))
                   )}
@@ -477,7 +508,12 @@ export default function BookingsPage() {
 
 // --- SUB COMPONENTS ---
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, hasPendingRequest }) => {
+  // 🔥 UPDATED BADGE FOR REQUESTS
+  if (hasPendingRequest || status === 'CANCELLATION_REQUESTED') {
+    return <span className="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border bg-red-100 text-red-700 border-red-200 animate-pulse">REFUND REQUESTED</span>;
+  }
+
   const styles = {
     CONFIRMED: "bg-green-100 text-green-700 border-green-200",
     PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -486,38 +522,56 @@ const StatusBadge = ({ status }) => {
     NO_SHOW: "bg-orange-50 text-orange-700 border-orange-200",
     default: "bg-gray-100 text-gray-600 border-gray-200"
   };
-  return <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${styles[status] || styles.default}`}>{status}</span>;
+  return <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border ${styles[status] || styles.default}`}>{status?.replace('_', ' ')}</span>;
 };
 
-const ActionButtons = ({ app, onUpdate }) => (
-  <div className="flex gap-2">
-    {app.status === "PENDING" && (
-      <>
-        <button onClick={() => onUpdate(app.id, "CONFIRMED")} className="flex-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700">Approve</button>
-        <button onClick={() => onUpdate(app.id, "CANCELLED")} className="flex-1 border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-50">Reject</button>
-      </>
-    )}
-    {app.status === "CONFIRMED" && (
-      <>
-        <button onClick={() => onUpdate(app.id, "COMPLETED")} className="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700">Complete</button>
-        <button onClick={() => onUpdate(app.id, "NO_SHOW")} className="flex-1 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-50">No-Show</button>
-      </>
-    )}
-  </div>
-);
+const ActionButtons = ({ app, onUpdate, onProcessRequest }) => {
+  // 🔥 NEW: REFUND REQUEST BUTTONS
+  if (app.hasPendingRequest || app.status === 'CANCELLATION_REQUESTED') {
+    return (
+      <div className="flex flex-col gap-1 w-full">
+         <div className="text-[10px] text-red-600 italic bg-red-50 p-1.5 rounded mb-1 border border-red-100">
+           Reason: "{app.requestReason || "Patient requested cancellation"}"
+         </div>
+         <div className="flex gap-2">
+            <button onClick={() => onProcessRequest(app, 'APPROVE')} className="flex-1 bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 shadow-sm">Approve Refund</button>
+            <button onClick={() => onProcessRequest(app, 'REJECT')} className="flex-1 border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50">Reject</button>
+         </div>
+      </div>
+    );
+  }
 
-const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => {
+  // STANDARD BUTTONS (UNCHANGED)
+  return (
+    <div className="flex gap-2">
+      {app.status === "PENDING" && (
+        <>
+          <button onClick={() => onUpdate(app.id, "CONFIRMED")} className="flex-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-700">Approve</button>
+          <button onClick={() => onUpdate(app.id, "CANCELLED")} className="flex-1 border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-50">Reject</button>
+        </>
+      )}
+      {app.status === "CONFIRMED" && (
+        <>
+          <button onClick={() => onUpdate(app.id, "COMPLETED")} className="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700">Complete</button>
+          <button onClick={() => onUpdate(app.id, "NO_SHOW")} className="flex-1 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-50">No-Show</button>
+        </>
+      )}
+    </div>
+  );
+};
+
+const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead, onProcessRequest }) => {
   const relativeDate = getRelativeDateLabel(app.slot?.date || app.date);
   
   return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+    <div className={`bg-white p-5 rounded-xl shadow-sm border ${app.hasPendingRequest ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-200'}`}>
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="font-bold text-gray-900 text-lg">{app.patientName}</h3>
           <p className="text-sm text-gray-500">{app.patientPhone}</p>
         </div>
         <div className="text-right">
-          <StatusBadge status={app.status} />
+          <StatusBadge status={app.status} hasPendingRequest={app.hasPendingRequest} />
           <CancelMeta app={app} />
         </div>
       </div>
@@ -545,17 +599,22 @@ const MobileAppointmentCard = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
         </div>
         {isRescheduled && <span className="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 px-1.5 rounded font-bold">⚠️ Rescheduled</span>}
       </div>
-      {["PENDING", "CONFIRMED"].includes(app.status) ? <ActionButtons app={app} onUpdate={onUpdate} /> : canShowMarkAsRead(app) ? <button onClick={() => onMarkAsRead(app)} className="w-full bg-gray-900 text-white px-3 py-2 rounded-lg text-xs font-bold">Mark as read</button> : null}
+      
+      {/* ACTION BUTTONS LOGIC */}
+      <ActionButtons app={app} onUpdate={onUpdate} onProcessRequest={onProcessRequest} />
+      
+      {!app.hasPendingRequest && !["PENDING", "CONFIRMED"].includes(app.status) && canShowMarkAsRead(app) && (
+        <button onClick={() => onMarkAsRead(app)} className="w-full bg-gray-900 text-white px-3 py-2 rounded-lg text-xs font-bold mt-2">Mark as read</button>
+      )}
     </div>
   );
 };
 
-const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead }) => {
-  // Calculate relative date label (Today, Tomorrow)
+const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead, onMarkAsRead, onProcessRequest }) => {
   const relativeDate = getRelativeDateLabel(app.slot?.date || app.date);
 
   return (
-    <tr className="hover:bg-gray-50 transition-colors">
+    <tr className={`hover:bg-gray-50 transition-colors ${app.hasPendingRequest ? 'bg-red-50/50' : ''}`}>
       <td className="p-5">
         <div className="font-bold text-gray-900">{app.patientName}</div>
         <div className="text-xs text-gray-500">{app.patientPhone}</div>
@@ -566,7 +625,6 @@ const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
         <div className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded w-max mt-1">{app.doctorSpecialization}</div>
       </td>
       <td className="p-5">
-        {/* 🔥 NEW: DATE DISPLAY LOGIC */}
         <div className="flex items-center gap-2 mb-0.5">
            {relativeDate && (
              <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase tracking-wide">
@@ -580,22 +638,30 @@ const DesktopAppointmentRow = ({ app, onUpdate, isRescheduled, canShowMarkAsRead
         <div className="text-xs text-gray-600 font-mono">
           {app.timeFormatted}
         </div>
-        
-        {/* Booked On */}
         <div className="mt-1.5 text-[10px] text-gray-400 font-medium">
            Booked: {formatCreatedDate(app.createdAt)}
         </div>
-
         {isRescheduled && <span className="block mt-1.5 text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded w-max font-bold">⚠️ Rescheduled</span>}
       </td>
-      <td className="p-5"><StatusBadge status={app.status} /><CancelMeta app={app} /></td>
+      <td className="p-5">
+        <StatusBadge status={app.status} hasPendingRequest={app.hasPendingRequest} />
+        <CancelMeta app={app} />
+      </td>
       <td className="p-5 align-top">
         <div className="text-xs font-semibold text-gray-800">{getPaymentSummary(app)}</div>
         {app.adminNote && <div className="mt-1 text-[11px] text-gray-500 italic">{app.adminNote}</div>}
       </td>
       <td className="p-5">
         <div className="w-44">
-          {["PENDING", "CONFIRMED"].includes(app.status) ? <ActionButtons app={app} onUpdate={onUpdate} /> : canShowMarkAsRead(app) ? <button onClick={() => onMarkAsRead(app)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white">Mark as read</button> : <span className="text-xs text-gray-400 font-bold uppercase">{app.status.replace('_', ' ')}</span>}
+          <ActionButtons app={app} onUpdate={onUpdate} onProcessRequest={onProcessRequest} />
+          
+          {!app.hasPendingRequest && !["PENDING", "CONFIRMED"].includes(app.status) && canShowMarkAsRead(app) ? (
+            <button onClick={() => onMarkAsRead(app)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-900 text-white mt-2">Mark as read</button>
+          ) : (
+            !app.hasPendingRequest && !["PENDING", "CONFIRMED"].includes(app.status) && (
+              <span className="text-xs text-gray-400 font-bold uppercase">{app.status.replace('_', ' ')}</span>
+            )
+          )}
         </div>
       </td>
     </tr>
