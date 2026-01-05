@@ -68,6 +68,8 @@ export default function LandingPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
+   const [cities, setCities] = useState([]);
+const [city, setCity] = useState('');
 
   const fetchClinics = async (q = "") => {
     setLoading(true);
@@ -102,32 +104,101 @@ export default function LandingPage() {
     return () => clearTimeout(id);
   }, [search]);
 
+  const fetchCities = async () => {
+    try {
+      const res = await api.get(ENDPOINTS.PUBLIC.CLINIC_CITIES, { params: { _t: Date.now() } });
+      console.log("CLINIC_CITIES endpoint:", ENDPOINTS.PUBLIC.CLINIC_CITIES);
+
+      const list = res.data?.cities || [];
+      setCities(Array.isArray(list) ? list : []);
+      // set default city if empty
+      if (!localStorage.getItem('city') && list?.length) {
+        setCity(list[0]);
+      }
+    } catch (err) {
+      console.error("Cities fetch error:", err);
+    }
+  };
+   useEffect(() => {
+    fetchCities();
+  }, []);
+
+  // 2) persist city + refetch clinics when city changes
+  useEffect(() => {
+    if (city) localStorage.setItem('city', city);
+    fetchClinics({ q: search, cityParam: city });
+  }, [city]); // keep this only for city change
+
+  // 3) debounce search (keep your pattern)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      fetchClinics({ q: search, cityParam: city });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [search, city]);
   return (
     <UserLayout>
       {/* --- Hero Section --- */}
-      <motion.section
-        className="bg-white pt-10 pb-16 text-center px-4"
-        initial="hidden"
-        animate="visible"
-        variants={fadeUp}
+   <motion.section
+  className="bg-white pt-16 pb-24 text-center px-4"
+  initial="hidden"
+  animate="visible"
+  variants={fadeUp}
+>
+  {/* Header Section */}
+  <motion.h1 className="text-4xl md:text-6xl font-black text-sky-950 mb-6 tracking-tight">
+    Find Your Care Center
+  </motion.h1>
+  <p className="text-gray-500 text-lg max-w-2xl mx-auto mb-10">
+    Discover clinics near you, compare ratings, and book appointments in a few clicks.
+  </p>
+
+  {/* Unified Search Bar Container */}
+  <div className="max-w-4xl mx-auto bg-white p-2 rounded-2xl md:rounded-full shadow-xl border border-gray-100 flex flex-col md:flex-row items-center gap-2">
+    
+    {/* City Dropdown with Icon */}
+    <div className="relative w-full md:w-1/3">
+      <select
+        value={city}
+        onChange={(e) => setCity(e.target.value)}
+        className="w-full pl-5 pr-10 py-4 bg-transparent text-gray-700 font-medium focus:outline-none appearance-none cursor-pointer"
       >
-        <motion.h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-sky-950 mb-4">
-          Find Your Care Center
-        </motion.h1>
-        <p className="text-gray-500 max-w-xl mx-auto">
-          Discover clinics near you, compare ratings and book appointments in a
-          few clicks.
-        </p>
-        <div className="mt-6 max-w-xl mx-auto">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search clinics by name or city..."
-            className="w-full px-4 py-3 rounded-full border border-gray-300 shadow-sm outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-          />
-        </div>
-      </motion.section>
+        <option value="">All Cities</option>
+        {cities.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
+      {/* Custom arrow icon for the select */}
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+        ▼
+      </div>
+    </div>
+
+    {/* Vertical Divider (Desktop only) */}
+    <div className="hidden md:block h-8 w-[1px] bg-gray-200"></div>
+
+    {/* Text Search input */}
+    <div className="w-full md:w-2/3 flex items-center">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search clinics by name or specialty..."
+        className="w-full px-5 py-4 bg-transparent text-gray-700 focus:outline-none"
+      />
+      
+      {/* Primary Action Button */}
+      <button className="hidden md:block bg-sky-600 hover:bg-sky-700 text-white px-8 py-3 rounded-full font-semibold transition-all mr-1 shadow-md">
+        Search
+      </button>
+    </div>
+
+    {/* Mobile Button */}
+    <button className="md:hidden w-full bg-sky-600 text-white py-4 rounded-xl font-bold mt-2">
+      Search Now
+    </button>
+  </div>
+</motion.section>
 
       {/* --- Clinics Grid Section --- */}
       <section className="bg-gray-50 py-12 min-h-screen">

@@ -22,6 +22,8 @@ import ClinicAdminsPage from './features/superAdmin/ClinicAdminsPage.jsx';
 import EditClinicAdminPage from './features/superAdmin/EditClinicAdminPage.jsx';
 import SuperAdminAnalyticsPage from './features/superAdmin/SuperAdminAnalyticsPage.jsx';
 import PlansPage from './features/superAdmin/PlansPage.jsx';
+import SuperAdminRazorpayGateway from './features/superAdmin/SuperAdminRazorpayGateway.jsx';
+import RevenuePage from './features/superAdmin/RevenuePage.jsx';
 
 // --- CLINIC ADMIN ---
 import ClinicAdminDashboard from './features/clinicAdmin/ClinicAdminDashboard.jsx';
@@ -210,6 +212,14 @@ function AppContent() {
           }
         />
         <Route
+  path="/super-admin/gateway"
+  element={
+    <RequireRole allowedRoles={['SUPER_ADMIN']}>
+      <SuperAdminRazorpayGateway />
+    </RequireRole>
+  }
+/>
+        <Route
           path="/super-admin/audit-logs"
           element={
             <RequireRole allowedRoles={['SUPER_ADMIN']}>
@@ -225,6 +235,7 @@ function AppContent() {
             </RequireRole>
           }
         />
+         <Route path="/super-admin/revenue" element={<RevenuePage />} />
         <Route
           path="/super-admin/plans"
           element={
@@ -286,6 +297,7 @@ function AppContent() {
                     path="patients/:userId/history"
                     element={<PatientHistoryPage />}
                   />
+                 
                   <Route path="specialities" element={<SpecialityManager />} /> 
                    <Route path="appointments" element={<ClinicAppointmentsPage />} />
                   <Route path="reviews" element={<ReviewsPage />} />

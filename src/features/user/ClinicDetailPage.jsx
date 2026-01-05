@@ -74,6 +74,30 @@ export default function ClinicPublicPage() {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [specialities, setSpecialities] = useState([]);
+  const [specialityId, setSpecialityId] = useState("");
+  const [doctorSearch, setDoctorSearch] = useState("");
+  
+  useEffect(() => {
+    if (!clinicId) return;
+    api
+      .get(ENDPOINTS.PUBLIC.CLINIC_SPECIALITIES(clinicId))
+      .then((res) => setSpecialities(res.data?.specialities || []))
+      .catch(() => setSpecialities([]));
+  }, [clinicId]);
+  
+  const filteredDoctors = React.useMemo(() => {
+    const q = doctorSearch.trim().toLowerCase();
+  
+    return doctors.filter((d) => {
+      const matchesSearch = !q || (d.name || "").toLowerCase().includes(q);
+  
+      const dSpecId = d.speciality?.id || d.specialityId; // supports both
+      const matchesSpec = !specialityId || dSpecId === specialityId;
+  
+      return matchesSearch && matchesSpec;
+    });
+  }, [doctors, doctorSearch, specialityId]);
 
   useEffect(() => {
     if (!clinicId) return;
@@ -263,86 +287,144 @@ export default function ClinicPublicPage() {
 
         {/* --- Doctors Section --- */}
         <div className="mt-12 space-y-10">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <span className="text-3xl">👨‍⚕️</span>
-              Available Specialists
-            </h2>
+  <div>
+    <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+      <span className="text-3xl">👨‍⚕️</span>
+      Available Specialists
+    </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {doctors.length === 0 ? (
-                <div className="col-span-3 text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-500">
-                  No doctors listed for this clinic yet.
-                </div>
-              ) : (
-                doctors.map((doctor) => {
-                  const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
-
-                  return (
-                    <div
-                      key={doctor.id}
-                      className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex flex-col items-center text-center transition-all hover:shadow-xl group h-full justify-between"
-                    >
-                      <div className="flex flex-col items-center w-full">
-                        <div className="w-28 h-28 rounded-full bg-gray-100 mb-4 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={doctor.name}
-                              className="w-full h-full object-cover rounded-full"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextSibling.style.display = 'block';
-                              }}
-                            />
-                          ) : null}
-                          <span
-                            className="hidden text-3xl"
-                            style={{ display: avatarUrl ? 'none' : 'block' }}
-                          >
-                            👨‍⚕️
-                          </span>
-                        </div>
-
-                        <h3 className="font-extrabold text-xl text-gray-900 transition-colors" style={stylePrimaryText}>
-                          Dr. {doctor.name}
-                        </h3>
-                        <p className="font-semibold text-base mb-1" style={styleSecondaryText}>
-                          {doctor.speciality?.name || 'Unknown'}
-                        </p>
-                        <p className="text-sm text-gray-500 mb-3">
-                          {doctor.experience} Yrs Experience
-                        </p>
-
-                        <div className="flex items-center gap-1.5 mb-5 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-100">
-                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                          <span className="font-bold text-gray-800 text-sm">
-                            {doctor.rating > 0 ? doctor.rating : 'New'}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            ({doctor.reviewCount || 0} reviews)
-                          </span>
-                        </div>
-                      </div>
-
-                      <Link
-                        to={`/doctors/${doctor.id}/book`}
-                        state={{ doctor: { ...doctor, clinicId: clinic.id } }}
-                        className="w-full py-3 text-center text-white font-bold text-base rounded-xl transition-colors shadow-lg hover:opacity-90 mt-auto"
-                        style={stylePrimaryBg}
-                      >
-                        Book Appointment
-                      </Link>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+    {/* Modern Unified Search Bar - Only this part is changed */}
+    <div className="mb-8 p-1.5 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-2 items-center">
+      
+      {/* Speciality Dropdown */}
+      <div className="relative w-full md:w-72">
+        <select
+          value={specialityId}
+          onChange={(e) => setSpecialityId(e.target.value)}
+          className="w-full pl-4 pr-10 py-3 rounded-xl bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-sky-500 transition-all appearance-none cursor-pointer font-medium text-gray-700"
+        >
+          <option value="">All Specialities</option>
+          {specialities.map((sp) => (
+            <option key={sp.id} value={sp.id}>
+              {sp.name}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
         </div>
       </div>
-    </UserLayout>
-  );
-}
+
+      {/* Subtle Vertical Divider (Visible on Desktop) */}
+      <div className="hidden md:block w-px h-8 bg-gray-200 mx-1"></div>
+
+      {/* Doctor Search Input */}
+      <div className="relative flex-1 w-full">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <input
+          value={doctorSearch}
+          onChange={(e) => setDoctorSearch(e.target.value)}
+          placeholder="Search doctor name..."
+          className="w-full pl-11 pr-4 py-3 rounded-xl bg-gray-50 border-transparent focus:bg-white focus:ring-2 focus:ring-sky-500 transition-all outline-none text-gray-700"
+        />
+      </div>
+    </div>
+       
+       
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+         {filteredDoctors.length === 0 ? (
+           <div className="col-span-3 text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-300 text-gray-500">
+             No doctors found for this speciality.
+           </div>
+         ) : (
+           filteredDoctors.map((doctor) => {
+             const avatarUrl = doctor.avatar ? toFullUrl(doctor.avatar) : null;
+       
+             return (
+               <div
+                 key={doctor.id}
+                 className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex flex-col items-center text-center transition-all hover:shadow-xl group h-full justify-between"
+               >
+                             <div className="flex flex-col items-center w-full">
+                               <div className="w-28 h-28 rounded-full bg-gray-100 mb-4 flex items-center justify-center border-4 border-white shadow-md overflow-hidden">
+                                 {avatarUrl ? (
+                                   <img
+                                     src={avatarUrl}
+                                     alt={doctor.name}
+                                     className="w-full h-full object-cover rounded-full"
+                                     onError={(e) => {
+                                       e.currentTarget.style.display = 'none';
+                                       e.currentTarget.nextSibling.style.display =
+                                         'block';
+                                     }}
+                                   />
+                                 ) : null}
+                                 <span
+                                   className="hidden text-3xl"
+                                   style={{
+                                     display: avatarUrl ? 'none' : 'block',
+                                   }}
+                                 >
+                                   👨‍⚕️
+                                 </span>
+                               </div>
+       
+                               <h3
+                                 className="font-extrabold text-xl text-gray-900 transition-colors"
+                                 style={stylePrimaryText}
+                               >
+                               {doctor.name}
+                               </h3>
+                               <p
+                                 className="font-semibold text-base mb-1"
+                                 style={styleSecondaryText}
+                               >
+                                 {doctor.speciality?.name || 'Unknown'}
+                               </p>
+                               <p className="text-sm text-gray-500 mb-3">
+                                 {doctor.experience} Yrs Experience
+                               </p>
+       
+                               <div className="flex items-center gap-1.5 mb-5 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-100">
+                                 <svg
+                                   className="w-4 h-4 text-yellow-500"
+                                   fill="currentColor"
+                                   viewBox="0 0 20 20"
+                                 >
+                                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                 </svg>
+                                 <span className="font-bold text-gray-800 text-sm">
+                                   {doctor.rating > 0 ? doctor.rating : 'New'}
+                                 </span>
+                                 <span className="text-xs text-gray-400">
+                                   ({doctor.reviewCount || 0} reviews)
+                                 </span>
+                               </div>
+                             </div>
+       
+                             <Link
+                               to={`/doctors/${doctor.id}/book`}
+                               state={{ doctor: { ...doctor, clinicId: clinic.id } }}
+                               className="w-full py-3 text-center text-white font-bold text-base rounded-xl transition-colors shadow-lg hover:opacity-90 mt-auto"
+                               style={stylePrimaryBg}
+                             >
+                               Book Appointment
+                             </Link>
+                           </div>
+                         );
+                       })
+                     )}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           </UserLayout>
+         );
+       }
+       

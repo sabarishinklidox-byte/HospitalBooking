@@ -1,64 +1,102 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { motion, useMotionValue, useAnimationFrame, useTransform } from 'framer-motion';
 import api from '../../lib/api';
 import { toast } from 'react-hot-toast';
 import { loginUser } from './authSlice';
 
-export default function UserSignup() {
-  const navigate = useNavigate();
-  const location = useLocation();        // contains state.from from booking page
-  const dispatch = useDispatch();
-  const [loading, setLoading] = useState(false);
+// --- SHINY TEXT COMPONENT (Single Play Logic) ---
+const ShinyText = ({ text, speed = 2, color = '#b5b5b5', shineColor = '#ffffff', spread = 120, delay = 0 }) => {
+  const progress = useMotionValue(0);
+  const animationDuration = speed * 1000;
+  const startTime = useRef(null);
+  const [isFinished, setIsFinished] = useState(false);
 
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
+  useAnimationFrame(time => {
+    if (isFinished) return;
+    
+    // Account for delay
+    if (startTime.current === null) {
+      startTime.current = time + (delay * 1000);
+    }
+    
+    if (time < startTime.current) return;
+
+    const elapsed = time - startTime.current;
+    const p = Math.min((elapsed / animationDuration) * 100, 100);
+    
+    progress.set(p);
+    if (p >= 100) setIsFinished(true);
   });
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const backgroundPosition = useTransform(progress, [0, 100], ["150% center", "-50% center"]);
+
+  const gradientStyle = {
+    backgroundImage: `linear-gradient(${spread}deg, ${color} 0%, ${color} 40%, ${shineColor} 50%, ${color} 60%, ${color} 100%)`,
+    backgroundSize: '200% auto',
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    display: 'inline-block'
+  };
+
+  return <motion.span style={{ ...gradientStyle, backgroundPosition }}>{text}</motion.span>;
+};
+
+// --- COUNTUP COMPONENT ---
+const CountUp = memo(({ end, label, delay = 0 }) => {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const endVal = parseInt(end.replace(/\D/g, ''));
+      const duration = 2000;
+      let startTimestamp = null;
+      const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        setCount(Math.floor(progress * endVal));
+        if (progress < 1) window.requestAnimationFrame(step);
+      };
+      window.requestAnimationFrame(step);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [end, delay]);
+
+  return (
+    <div className="flex flex-col">
+      <span className="text-3xl font-black text-white leading-none">
+        {count.toLocaleString()}{end.includes('+') ? '+' : ''}
+      </span>
+      <span className="text-[10px] uppercase tracking-[0.2em] text-teal-400 font-bold mt-2">{label}</span>
+    </div>
+  );
+});
+
+export default function UserSignup() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (form.password !== form.confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
+    if (form.password !== form.confirmPassword) return toast.error('Passwords do not match');
     try {
       setLoading(true);
-
-      // 1) Signup
-      await api.post('/user/signup', {
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        password: form.password,
-      });
-
-      // 2) Auto-login
-      const loginResult = await dispatch(
-        loginUser({ email: form.email, password: form.password })
-      );
-
-      if (loginResult.meta.requestStatus === 'rejected') {
+      await api.post('/user/signup', form);
+      const res = await dispatch(loginUser({ email: form.email, password: form.password }));
+      
+      if (res.meta.requestStatus === 'rejected') {
         toast.success('Account created! Please log in.');
-        // keep from-state when going to login
-        navigate('/login', { state: location.state });
-        return;
+        return navigate('/login', { state: location.state });
       }
-
-      toast.success('Account created and logged in!');
-
-      // 3) Go back where user came from (booking page)
-      const origin = location.state?.from?.pathname || '/';
-      navigate(origin, { replace: true });
-
+      toast.success('Welcome to DocBook!');
+      navigate(location.state?.from?.pathname || '/', { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.error || 'Signup failed');
     } finally {
@@ -67,140 +105,108 @@ export default function UserSignup() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
-      {/* LEFT SIDE */}
-     <div className="hidden lg:flex lg:w-1/2 bg-[#003366] flex-col justify-center px-12 relative overflow-hidden">
-  {/* Content */}
-  <div className="relative z-10 text-white">
-    <h1 className="text-5xl font-extrabold mb-6">Welcome to MediCare</h1>
-    <p className="text-lg text-blue-100 leading-relaxed mb-8">
-      Join thousands of patients managing their health appointments with ease.
-    </p>
+    <div className="min-h-screen flex bg-white font-sans overflow-hidden">
+      {/* LEFT SIDE: Brand & Info */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#002244] flex-col justify-center px-20 relative overflow-hidden">
+        <div className="absolute top-[-5%] right-[-5%] w-[35rem] h-[35rem] bg-[#002244] rounded-full blur-[100px] animate-pulse" />
+        
+        <div className="relative z-10">
+          <div className="mb-10">
+            <motion.span 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="text-teal-400 font-bold tracking-[0.3em] uppercase text-sm block mb-4"
+            >
+              Welcome to
+            </motion.span>
+            
+            <h1 className="text-7xl lg:text-8xl font-black tracking-tighter leading-none flex items-center">
+              {/* Sequential shine: Book starts after Doc is midway through */}
+              <ShinyText text="Doc" speed={2} color="#2dd4bf" shineColor="#ffffff" delay={0.5} />
+              <ShinyText text="Book" speed={2} color="#ffffff" shineColor="#38bdf8" delay={0.8} />
+            </h1>
+            
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: 96 }}
+              transition={{ delay: 1.2, duration: 0.8 }}
+              className="h-2 bg-teal-400 mt-8 rounded-full shadow-[0_0_20px_rgba(45,212,191,0.6)]" 
+            />
+          </div>
 
-    <div className="flex gap-4">
-      {[
-        { value: "10K+", label: "Patients" },
-        { value: "500+", label: "Top Doctors" },
-        { value: "100+", label: "Cities" },
-      ].map((item, i) => (
-        <div
-          key={i}
-          className="bg-white/10 p-4 rounded-lg backdrop-blur-sm"
-        >
-          <h3 className="font-bold text-xl">{item.value}</h3>
-          <p className="text-sm opacity-80">{item.label}</p>
+          <p className="text-2xl text-blue-100/80 leading-relaxed mb-16 max-w-md font-semibold">
+            Join India's premium healthcare network. Connect with world-class specialists in clicks.
+          </p>
+
+          <div className="grid grid-cols-3 gap-8">
+            <CountUp end="50K+" label="Patients" delay={1500} />
+            <CountUp end="500+" label="Doctors" delay={1800} />
+            <CountUp end="100+" label="Cities" delay={2100} />
+          </div>
         </div>
-      ))}
-    </div>
-  </div>
+      </div>
 
-  {/* Backdrop blobs */}
-  <div className="absolute top-[-15%] right-[-15%] w-[30rem] h-[30rem] bg-blue-500/20 rounded-full blur-3xl" />
-  <div className="absolute bottom-[-15%] left-[-15%] w-[30rem] h-[30rem] bg-purple-500/20 rounded-full blur-3xl" />
-</div>
-
-
-      {/* RIGHT SIDE */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
-            <p className="text-gray-500 mt-2">Sign up to book your first appointment</p>
+      {/* RIGHT SIDE: Signup Form */}
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-16 bg-white relative overflow-y-auto">
+        <div className="w-full max-w-md py-10">
+          <div className="mb-10 space-y-2">
+            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Create Account</h2>
+            <p className="text-slate-500 font-medium italic">Join the medical revolution.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                required
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="John Doe"
-                value={form.name}
-                onChange={handleChange}
-              />
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 ml-1">Full Name</label>
+              <input type="text" name="name" required value={form.name} onChange={handleChange}
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all outline-none font-medium text-slate-800"
+                placeholder="John Doe" />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                name="email"
-                required
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={handleChange}
-              />
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 ml-1">Email Address</label>
+              <input type="email" name="email" required value={form.email} onChange={handleChange}
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all outline-none font-medium text-slate-800"
+                placeholder="john@example.com" />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number <span className="text-gray-400">(Optional)</span>
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
-                placeholder="+1 234 567 890"
-                value={form.phone}
-                onChange={handleChange}
-              />
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600 ml-1">Phone Number</label>
+              <input type="tel" name="phone" value={form.phone} onChange={handleChange}
+                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all outline-none font-medium text-slate-800"
+                placeholder="+91 00000 00000" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={handleChange}
-                />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1 relative">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 ml-1">Password</label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} name="password" required value={form.password} onChange={handleChange}
+                    className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none font-medium text-slate-800"
+                    placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#003366] text-[10px] font-black uppercase hover:text-teal-600 transition-colors">
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  required
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
-                  placeholder="••••••••"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                />
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 ml-1">Confirm</label>
+                <input type="password" name="confirmPassword" required value={form.confirmPassword} onChange={handleChange}
+                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:bg-white outline-none font-medium text-slate-800"
+                  placeholder="••••••••" />
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 rounded-lg font-bold text-white bg-[#003366] hover:bg-[#002244] shadow-lg hover:shadow-xl transition-all disabled:opacity-70"
+            <button type="submit" disabled={loading}
+              className="w-full py-5 rounded-2xl font-black text-white bg-[#003366] hover:bg-teal-600 shadow-[0_15px_30px_-10px_rgba(0,51,102,0.4)] hover:shadow-teal-500/30 transition-all duration-500 transform active:scale-[0.97] mt-4 uppercase tracking-widest text-sm"
             >
-              {loading ? 'Creating Account...' : 'Sign Up'}
+              {loading ? "Processing..." : "Create My Account"}
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link
-              to="/login"
-              state={location.state}  // keep { from, doctor } when going to login
-              className="font-bold text-[#003366] hover:underline"
-            >
-              Log in here
+          <p className="mt-8 text-center text-sm font-bold text-slate-500">
+            Already have an account? {' '}
+            <Link to="/login" className="text-[#003366] hover:text-teal-600 transition-all underline underline-offset-4 decoration-2 decoration-teal-500/20 hover:decoration-teal-500">
+              Sign In
             </Link>
           </p>
         </div>

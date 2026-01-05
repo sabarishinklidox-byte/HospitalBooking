@@ -17,6 +17,10 @@ PAYMENT: {
      GOOGLE_PLACE_ID: "/public/google/place-id",
      ORGANIZATION_REGISTER: "/public/organizations/register",
      SLOTS: '/public/slots',
+     ORGANIZATION_VERFIY:"/public/register-organization/verify",
+       CLINIC_CITIES: '/public/clinics/cities',
+       CLINIC_SPECIALITIES: (clinicId) => `/public/clinics/${clinicId}/specialities`,
+
   },
 
  USER: {
@@ -31,19 +35,21 @@ PAYMENT: {
   RESCHEDULE_APPOINTMENT: (id) => `/user/appointments/${id}/reschedule`,
   REVIEWS: '/user/reviews',
   DOCTOR_REVIEWS: (doctorId) => `/user/doctors/${doctorId}/reviews`,
-   SLOTS: '/user/slots'
+   SLOTS: '/user/slots',
+   
 },
 
 
   ADMIN: {
   LOGIN: '/admin/login',
   DASHBOARD: '/admin/dashboard',
+   SUBSCRIPTION_VERIFY: '/admin/subscription/verify-razorpay',
       SPECIALITIES: '/admin/specialities',
       CANCELLATION_PROCESS: "/admin/cancellation-process",
     SPECIALITY_BY_ID: (id) => `/admin/specialities/${id}`,
 PATIENT_HISTORY: (userId) => `/admin/patients/${userId}/history`,
   DOCTORS: '/admin/doctors',
-  DOCTOR_BY_ID: (id) => `/admin/doctors/${id}`,
+  DOCTOR_BY_ID: (id) => `/admin/doctors/${id}`, 
   DOCTOR_TOGGLE_ACTIVE: (id) => `/admin/doctors/${id}/toggle`,
 
   SLOTS: '/admin/slots',
@@ -126,6 +132,9 @@ SUPER_ADMIN: {
          PLANS: '/super-admin/plans',
           PLAN_BY_ID: (id) => `/super-admin/plans/${id}`,
             AUDIT_LOGS: '/super-admin/audit-logs',
+             GATEWAY_RAZORPAY: '/super-admin/gateway/razorpay',
+             PLANS_MANAGE: '/super-admin/plans',
+             REVENUE: '/super-admin/revenue',
           
 }
 

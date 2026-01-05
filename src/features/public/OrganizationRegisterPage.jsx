@@ -142,41 +142,127 @@ export default function OrganizationRegisterPage() {
 
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    // Validate final step before submitting
-    const error = validateStep(3);
-    if (error) return toast.error(error);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  // 1. Validation Check
+  const error = validateStep(3);
+  if (error) return toast.error(error);
+  if (!form.planId) return toast.error('Please select a plan to continue');
+
+  setRegistering(true);
+  
+  try {
+    // 2. Data Sanitization (Crucial for Zod)
+    const sanitizedForm = {
+      ...form,
+      clinicPhone: String(form.clinicPhone).trim(),
+      ownerPhone: String(form.ownerPhone).trim(),
+      pincode: String(form.pincode).trim(),
+      bankName: form.bankName || "",
+      accountNumber: form.accountNumber ? String(form.accountNumber) : "",
+      ifscCode: form.ifscCode || ""
+    };
+
+    const res = await api.post(ENDPOINTS.PUBLIC.ORGANIZATION_REGISTER, sanitizedForm);
     
-    if (!form.planId) return toast.error('Please select a plan');
-
-    setRegistering(true);
-    try {
-      const res = await api.post(ENDPOINTS.PUBLIC.ORGANIZATION_REGISTER, form);
-      const { token, user, clinic } = res.data;
-
-      localStorage.setItem('token', token);
-
-      if (user) dispatch(setUser(user));
-      if (clinic) dispatch(setClinic(clinic));
-
-      toast.success(`Welcome ${user?.name || 'Admin'}!`);
-      // Use replace to prevent back-button navigation to register page
-      window.location.replace('/admin/dashboard');
-    } catch (err) {
-      console.error(err);
+    // 3. Handle Free Plan / Trial Registration
+    if (!res.data.requiresPayment) {
+      localStorage.setItem('token', res.data.token);
+      dispatch(setUser(res.data.user));
+      dispatch(setClinic(res.data.clinic));
+      toast.success(res.data.message);
       
-      // Handle Zod Array Errors specifically if backend sends them
-      if (err.response?.data?.details && Array.isArray(err.response.data.details)) {
-         // Show the first validation error from the array
-         toast.error(err.response.data.details[0]); 
-      } else {
-         toast.error(err.response?.data?.error || 'Registration failed');
-      }
-    } finally {
-      setRegistering(false);
+      setTimeout(() => {
+        window.location.replace('/admin/dashboard');
+      }, 1500);
+      return;
     }
-  };
+
+    // 4. Handle Paid Plan (Razorpay Integration) - ✅ FIXED
+    const { razorpayOrderId, amount, currency, key } = res.data.payment;
+    
+    // 🔥 RAZORPAY NAME SANITIZER (Fixes UPI "name format invalid")
+    const sanitizeRazorpayName = (rawName) => {
+      if (!rawName?.trim()) return 'Customer';
+      return rawName
+        .trim()                                    // Remove leading/trailing spaces
+        .replace(/\s+/g, ' ')                      // Collapse multiple spaces
+        .replace(/[^A-Za-z\s.'@()\/]/g, '')        // Only allowed chars (Razorpay/UPI safe)
+        .slice(0, 50)                              // Max length
+        .replace(/\b\w/g, char => char.toUpperCase()); // Title case polish
+    };
+
+    const options = {
+      key, 
+      amount, 
+      currency, 
+      order_id: razorpayOrderId,
+       customer_id: res.data.payment.razorpayCustomerId,
+      name: 'DocBook SaaS',
+      description: `Clinic Registration: ${res.data.plan?.name || 'Professional Plan'}`,
+      prefill: {
+        name: sanitizeRazorpayName(form.ownerName),    // ✅ FIXED: Sanitized name
+        email: form.ownerEmail,
+        contact: form.ownerPhone
+      },
+    handler: async (response) => {
+  try {
+    // ✅ FIXED ENDPOINT
+    await api.post(ENDPOINTS.PUBLIC.ORGANIZATION_VERFIY, {
+      razorpay_order_id: response.razorpay_order_id,
+      razorpay_payment_id: response.razorpay_payment_id,
+      razorpay_signature: response.razorpay_signature
+    });
+
+    // Use registration response data (no /user/me needed)
+    localStorage.setItem('token', res.data.token);
+    dispatch(setUser(res.data.user));
+    dispatch(setClinic(res.data.clinic));
+    
+    toast.success('✅ Clinic activated!');
+    window.location.href = '/admin/dashboard';
+  } catch (err) {
+    console.error('Verify error:', err.response?.data);
+    toast.error('Contact support');
+  }
+},
+      modal: {
+        ondismiss: () => {
+          setRegistering(false);
+          toast.info('Payment cancelled');
+        }
+      },
+      theme: { 
+        color: '#003366' 
+      },
+      // Extra UPI safety
+      display: {
+        name: 'contact_name'  // Ensures name field is prominent
+      }
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', (err) => {
+      console.error('Razorpay failed:', err);
+      toast.error(err.error?.description || 'Payment process failed');
+    });
+    rzp.open();
+
+  } catch (err) {
+    const serverDetails = err.response?.data?.details;
+    const errorMessage = Array.isArray(serverDetails) 
+      ? serverDetails[0] 
+      : (err.response?.data?.error || 'Registration failed');
+    
+    toast.error(errorMessage);
+    console.error("Registration Error:", serverDetails || err.response?.data);
+  } finally {
+    setRegistering(false);
+  }
+};
+;
+
 
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans text-slate-900">
@@ -491,7 +577,7 @@ export default function OrganizationRegisterPage() {
 
             {/* Support line under card */}
             <p className="mt-4 text-xs text-slate-500 text-center">
-              Need help? Email <a href="mailto:support@docbook.app" className="text-blue-600 underline">support@docbook.app</a> or call +91-98765-43210.
+              Need help? Email <a href="mailto:support@docbook.app" className="text-blue-600 underline">info@inklidox.com</a> or call +91 95004 11617
             </p>
           </div>
         </div>
