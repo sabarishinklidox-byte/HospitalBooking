@@ -92,12 +92,14 @@ const getPaymentSummary = (app) => {
     return <span className="text-green-600 font-bold">Free Visit</span>;
   }
 
-  // 3. RESCHEDULE SCENARIOS
-  if (financialStatus === "PAY_DIFFERENCE" && difference > 0) {
+  // 3️⃣ RESCHEDULE WITH PAYMENT CHANGE (CHECK FIRST!)
+  if (financialStatus === "PAY_DIFFERENCE" || financialStatus === "PAY_DIFFERENCE_OFFLINE") {
+    const paidAmount = finalAmount - difference;
+    const location = paymentMode === "ONLINE" ? "Online" : "at Clinic";
     return (
       <div className="flex flex-col">
-        <span className="text-orange-700 font-bold">Collect: ₹{difference}</span>
-        <span className="text-[10px] text-gray-500">Upgrade (Total: ₹{finalAmount})</span>
+        <span className="text-orange-700 font-bold">Paid ₹{paidAmount}, Collect ₹{difference}</span>
+        <span className="text-[10px] text-gray-500">{location} • Total ₹{finalAmount}</span>
       </div>
     );
   }
@@ -120,7 +122,7 @@ const getPaymentSummary = (app) => {
     );
   }
 
-  // 4. STANDARD ONLINE PAYMENT
+  // 4️⃣ STANDARD ONLINE PAYMENT (after financial status)
   if (paymentMode === "ONLINE") {
     if (paymentStatus === "PAID") {
       return <span className="text-green-700 font-medium">Paid Online: ₹{finalAmount}</span>;
@@ -129,7 +131,7 @@ const getPaymentSummary = (app) => {
     }
   }
 
-  // 5. STANDARD CLINIC PAYMENT
+  // 5️⃣ STANDARD CLINIC PAYMENT
   if (paymentMode === "CLINIC" || paymentMode === "OFFLINE") {
     if (paymentStatus === "PAID") {
       return <span className="text-green-700 font-medium">Paid at Clinic: ₹{finalAmount}</span>;
@@ -140,6 +142,7 @@ const getPaymentSummary = (app) => {
 
   return <span>Amount: ₹{finalAmount}</span>;
 };
+  
 
 // --- MAIN COMPONENT ---
 

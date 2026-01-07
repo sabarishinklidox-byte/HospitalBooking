@@ -103,8 +103,78 @@ export default function RescheduleAppointmentModal({
     });
     setSelectedDate(dayDate);
   };
+const convertTo24Hour = (time12h) => {
+  const [time, period] = time12h.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+  // const handleConfirm = async () => {
+  //   if (!selectedDate || !selectedSlot?.slotId || !selectedSlot.time) {
+  //     setError("Please select a valid time slot.");
+  //     return;
+  //   }
 
-  const handleConfirm = async () => {
+  //   if (selectedSlot?.isBooked) {
+  //     setError("This slot is already booked. Please choose another slot.");
+  //     return;
+  //   }
+
+  //   try {
+  //     setSaving(true);
+  //     setError("");
+
+  //     console.log('🚀 Rescheduling to:', {
+  //       newSlotId: selectedSlot.slotId,
+  //       newDate: selectedDate,
+  //       newTime: selectedSlot.time,      // ✅ NOW GUARANTEED!
+  //       note,
+  //       deleteOldSlot
+  //     });
+
+  //     const res = await api.patch(
+  //       `${ENDPOINTS.ADMIN.APPOINTMENT_BY_ID(appointment.id)}/reschedule`,
+  //       {
+  //         newSlotId: selectedSlot.slotId,
+  //         newDate: selectedDate,
+  //         newTime: selectedSlot.time,      // ✅ FIXED!
+  //         note,
+  //         deleteOldSlot,
+  //       }
+  //     );
+
+  //     // Handle financial alerts
+  //     const status = res.data?.financialStatus;
+  //     const adminAlert = res.data?.adminNote || res.data?.financialAction;
+
+  //     if (status === 'PAY_DIFFERENCE' || status === 'PAY_DIFFERENCE_OFFLINE') {
+  //       toast((t) => (
+  //         <div className="text-sm">⚠️ <b>Collect Payment!</b><br/>{adminAlert}</div>
+  //       ), { duration: 8000, icon: '💰' });
+  //     } else if (status === 'REFUND_AT_CLINIC' || status === 'FULL_REFUND') {
+  //       toast((t) => (
+  //         <div className="text-sm">ℹ️ <b>Refund Required!</b><br/>{adminAlert}</div>
+  //       ), { duration: 8000, icon: '💸' });
+  //     } else if (status === 'FREE_SLOT') {
+  //       toast.success("✅ Rescheduled to FREE slot!");
+  //     } else {
+  //       toast.success("✅ Rescheduled successfully!");
+  //     }
+
+  //     onRescheduled?.(res.data?.appointment);
+  //     onClose();
+  //   } catch (err) {
+  //     console.error("❌ Reschedule failed", err);
+  //     setError(err?.response?.data?.error || "Failed to reschedule appointment.");
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
+const handleConfirm = async () => {
+    // 1. Validation
     if (!selectedDate || !selectedSlot?.slotId || !selectedSlot.time) {
       setError("Please select a valid time slot.");
       return;
@@ -119,53 +189,84 @@ export default function RescheduleAppointmentModal({
       setSaving(true);
       setError("");
 
-      console.log('🚀 Rescheduling to:', {
-        newSlotId: selectedSlot.slotId,
-        newDate: selectedDate,
-        newTime: selectedSlot.time,      // ✅ NOW GUARANTEED!
-        note,
-        deleteOldSlot
-      });
-
+      // 2. API Call to Backend
       const res = await api.patch(
         `${ENDPOINTS.ADMIN.APPOINTMENT_BY_ID(appointment.id)}/reschedule`,
         {
-          newSlotId: selectedSlot.slotId,
+        
           newDate: selectedDate,
-          newTime: selectedSlot.time,      // ✅ FIXED!
+          newTime: convertTo24Hour(selectedSlot.time),
           note,
-          deleteOldSlot,
+   
         }
       );
 
-      // Handle financial alerts
-      const status = res.data?.financialStatus;
-      const adminAlert = res.data?.adminNote || res.data?.financialAction;
+      /**
+       * 3. DATA EXTRACTION
+       * We extract the updated appointment object. 
+       * This object must contain the new 'amount' (900) and 'diffAmount' (400).
+       */
+      const updatedApp = res.data?.appointment || res.data;
+      const status = res.data?.financialStatus || updatedApp?.financialStatus;
+      const adminAlert = res.data?.adminNote || res.data?.financialAction || updatedApp?.adminNote;
 
+      // 4. FINANCIAL ALERTS (Toasts)
       if (status === 'PAY_DIFFERENCE' || status === 'PAY_DIFFERENCE_OFFLINE') {
         toast((t) => (
-          <div className="text-sm">⚠️ <b>Collect Payment!</b><br/>{adminAlert}</div>
-        ), { duration: 8000, icon: '💰' });
-      } else if (status === 'REFUND_AT_CLINIC' || status === 'FULL_REFUND') {
+          <div className="text-sm">
+            <span className="font-bold text-orange-600">💰 Payment Required</span>
+            <br />
+            {adminAlert || `Please collect the difference at the clinic.`}
+          </div>
+        ), { duration: 6000 });
+      } 
+      else if (status === 'REFUND_AT_CLINIC' || status === 'FULL_REFUND') {
         toast((t) => (
-          <div className="text-sm">ℹ️ <b>Refund Required!</b><br/>{adminAlert}</div>
-        ), { duration: 8000, icon: '💸' });
-      } else if (status === 'FREE_SLOT') {
-        toast.success("✅ Rescheduled to FREE slot!");
-      } else {
-        toast.success("✅ Rescheduled successfully!");
+          <div className="text-sm">
+            <span className="font-bold text-blue-600">💸 Refund Due</span>
+            <br />
+            {adminAlert || `Patient is owed a refund.`}
+          </div>
+        ), { duration: 6000 });
+      } 
+      else if (status === 'FREE_SLOT') {
+        toast.success("Rescheduled to a free slot.");
+      } 
+      else {
+        toast.success("Appointment rescheduled successfully!");
       }
 
-      onRescheduled?.(res.data?.appointment);
+      /**
+       * 5. STATE SYNC
+       * We pass the updatedApp back to the parent.
+       * The Parent's 'onRescheduled' must update the list so the 
+       * AppointmentCard receives the new 900/400 values.
+       */
+      if (onRescheduled) {
+        onRescheduled(updatedApp);
+      }
+      
       onClose();
+
     } catch (err) {
-      console.error("❌ Reschedule failed", err);
-      setError(err?.response?.data?.error || "Failed to reschedule appointment.");
+      
+      console.error("❌ Reschedule Error:", err);
+        console.error("❌ FULL ERROR:", {
+    message: err.message,
+    status: err.response?.status,
+    statusText: err.response?.statusText,
+    data: err.response?.data,
+    url: err.config?.url,
+    method: err.config?.method,
+  });
+  
+      const serverError = err?.response?.data?.error || "Failed to reschedule.";
+      setError(serverError);
+      toast.error(serverError);
     } finally {
       setSaving(false);
     }
   };
-
   const periods = ["Morning", "Afternoon", "Evening"];
   const dayObj = slotsByDay.find((d) => d.date === selectedDate) || { slots: [] };
 

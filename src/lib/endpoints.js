@@ -42,6 +42,7 @@ PAYMENT: {
 
   ADMIN: {
   LOGIN: '/admin/login',
+  APPOINTMENT_RESCHEDULE: (id) => `/admin/appointments/${id}/reschedule`,
   DASHBOARD: '/admin/dashboard',
    SUBSCRIPTION_VERIFY: '/admin/subscription/verify-razorpay',
       SPECIALITIES: '/admin/specialities',
