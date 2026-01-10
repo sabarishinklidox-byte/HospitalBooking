@@ -7,6 +7,8 @@ import { ENDPOINTS } from '../../lib/endpoints';
 import { CreditCard, CheckCircle, AlertCircle, Search } from 'lucide-react';
 import { useAdminContext } from '../../context/AdminContext.jsx';
 import UpgradeNotice from '../../components/UpgradeNotice.jsx';
+import { CalendarIcon, LinkIcon } from 'lucide-react';
+
 
 export default function ClinicSettingsPage() {
   const { plan, loading: planLoading } = useAdminContext() || {};
@@ -630,6 +632,62 @@ export default function ClinicSettingsPage() {
               </div>
             </form>
           </section>
+          <section className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-sm border-2 border-blue-100 overflow-hidden">
+  <div className="px-6 py-4 border-b border-blue-100 bg-white/80 flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <div className="bg-blue-100 p-2 rounded-xl">
+        <CalendarIcon className="w-6 h-6 text-blue-600" />
+      </div>
+      <div>
+        <h2 className="text-lg font-bold text-gray-900">Google Calendar Sync</h2>
+        <p className="text-sm text-gray-600">Auto-add appointments to your Google Calendar</p>
+      </div>
+    </div>
+    {plan?.enableGoogleCalendarSync ? (
+      clinic?.googleCalendarId ? (
+        <span className="flex items-center gap-1 bg-green-100 text-green-800 px-4 py-1.5 rounded-full text-sm font-bold">
+          <CheckCircle size={16} /> Connected
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 bg-orange-100 text-orange-800 px-4 py-1.5 rounded-full text-sm font-bold">
+          <AlertCircle size={16} /> Connect Required
+        </span>
+      )
+    ) : (
+      <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-bold">Pro Only</span>
+    )}
+  </div>
+  
+    <div className="p-6">
+      {!plan?.enableGoogleCalendarSync ? (
+        <UpgradeNotice feature="Google Calendar Sync" planName={plan?.name} />
+      ) : !clinic?.googleCalendarId ? (
+        <button
+          onClick={() => window.location.href = `${api.defaults.baseURL}/clinic/google-calendar/connect?clinicId=${clinic.id}`}
+          className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-xl transition-all duration-300 text-lg"
+        >
+          <LinkIcon className="w-6 h-6" />
+          Connect Google Calendar
+        </button>
+      ) : (
+        <div className="flex items-center justify-between p-6 bg-green-50 border-2 border-green-100 rounded-xl">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-8 h-8 text-green-500" />
+            <div>
+              <p className="font-bold text-lg text-green-800">✅ Connected Successfully</p>
+              <p className="text-sm text-green-700">Appointments auto-sync to your calendar</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {/* disconnect API call */}}
+            className="px-6 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg transition-colors"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
+    </div>
+  </section>
 
           {/* Payment Gateway (Stripe + Razorpay) */}
           <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">

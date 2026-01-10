@@ -137,6 +137,12 @@ SUPER_ADMIN: {
              PLANS_MANAGE: '/super-admin/plans',
              REVENUE: '/super-admin/revenue',
           
-}
+},
+ GCAL: {
+    CONNECT: 'api/clinic/google-calendar/connect',
+    CALLBACK: '/api/clinic/google-calendar/callback',
+    DOCTOR_CONNECT: '/api/doctor/google-calendar/connect',
+  DOCTOR_CALLBACK: '/api/doctor/google-calendar/callback',
+  },
 
 };

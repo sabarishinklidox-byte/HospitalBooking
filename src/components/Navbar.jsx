@@ -23,21 +23,35 @@ export default function Navbar() {
   const safeRoleLabel = (user?.role ?? "USER").toLowerCase();
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20 items-center">
+   <nav className="sticky top-0 z-50  shadow-2xl transition-all">
+  <div className="max-w-[1440px] mx-auto px-8 lg:px-16 xl:px-24">
+    <div className="flex justify-between h-24 items-center">
+      
+      {/* LEFT: LOGO & BRAND */}
+      <div className="flex items-center gap-6 group cursor-pointer">
+        {/* Logo with Highlight */}
+        <div className="relative flex items-center justify-center">
+          {/* Subtle Glow behind the logo */}
+          <div className="absolute inset-0 bg-sky-400/30 blur-2xl rounded-full scale-125 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           
-          {/* LEFT: LOGO */}
-          <div className="flex items-center gap-4">
-           
-              <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0055aa] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md group-hover:shadow-lg transition-all duration-300">
-                D
-              </div>
-              <span className="text-2xl font-bold text-[#003366] tracking-tight hidden sm:block group-hover:text-[#0055aa] transition-colors">
-                DocBook
-              </span>
-           
-          </div>
+          <img 
+            src="/REWORK.png" 
+            alt="Inklidox Logo"
+            /* Increased size to h-14 for high visibility */
+            className="h-14 w-auto object-contain relative z-10 filter brightness-110 group-hover:scale-105 transition-transform duration-300" 
+          />
+        </div>
+        
+        {/* Brand Text Color Split */}
+        <div className="flex flex-col justify-center">
+          <span className="text-3xl font-black text-[blue] tracking-tighter leading-none mb-1">
+            Inklidox
+          </span>
+          <span className="text-xs font-bold text-black tracking-[0.3em] uppercase opacity-80">
+            Bookings
+          </span>
+        </div>
+      </div>
 
           {/* CENTER: DESKTOP NAVIGATION */}
           <div className="hidden md:flex items-center gap-8">

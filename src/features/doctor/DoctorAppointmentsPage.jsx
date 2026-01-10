@@ -14,17 +14,26 @@ export default function DoctorAppointmentsPage() {
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [prescriptionText, setPrescriptionText] = useState('');
 
-  const fetchAppointments = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(ENDPOINTS.DOCTOR.APPOINTMENTS);
-      setAppointments(res.data || []);
-    } catch (err) {
-      console.error('Failed to load appointments', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchAppointments = async (date = '') => {  // 🔥 Param for calendar
+  setLoading(true);
+  try {
+    // 🔥 Use calendar endpoint + date
+    const endpoint = date 
+      ? `${ENDPOINTS.DOCTOR.APPOINTMENTS_CALENDAR}/${date}`  // /doctor/appointments/2026-01-07
+      : ENDPOINTS.DOCTOR.APPOINTMENTS;                       // Old /doctor/appointments
+    
+    const res = await api.get(endpoint);
+    
+    // 🔥 Safe array extraction (handles {appointments:[]} + [])
+    const appts = res.data?.appointments || res.data || [];
+    setAppointments(appts);
+  } catch (err) {
+    console.error('Failed to load appointments', err);
+    setAppointments([]);  // 🔥 Safety net
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchAppointments();

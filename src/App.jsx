@@ -47,6 +47,7 @@ import DoctorDashboard from './features/doctor/DoctorDashboard.jsx';
 import DoctorAppointmentsPage from './features/doctor/DoctorAppointmentsPage.jsx';
 import DoctorProfilePage from './features/doctor/DoctorProfilePage.jsx';
 import MyReviewsPage from './features/doctor/MyReviewsPage.jsx';
+import DCPage from './features/doctor/DCPage.jsx'
 
 // --- USER / PUBLIC ---
 import LandingPage from './features/user/LandingPage.jsx';
@@ -67,6 +68,7 @@ import PaymentSuccessPage from './features/payment/PaymentSuccessPage.jsx';
 import Loader from './components/Loader.jsx';
 import OrganizationRegisterPage from './features/public/OrganizationRegisterPage.jsx';
 import PricingPage from './features/public/PricingPage.jsx';
+import GCalCallback from './layouts/GCalCallback.jsx';
 
 // ✅ NEW: Admin context
 import { AdminProvider } from './context/AdminContext.jsx';
@@ -263,6 +265,14 @@ function AppContent() {
           }
         />
         <Route
+  path="/doctor/calendar"  // 🔥 NEW: Your calendar page
+  element={
+    <RequireRole allowedRoles={['DOCTOR']}>
+      <DCPage />
+    </RequireRole>
+  }
+/>
+        <Route
           path="/doctor/profile"
           element={
             <RequireRole allowedRoles={['DOCTOR']}>
@@ -337,6 +347,9 @@ function AppContent() {
             </RequireRole>
           }
         />
+        {/* Before 404 */}
+<Route path="/clinic/google-calendar/callback" element={<GCalCallback />} />
+
 
         {/* 404 */}
         <Route path="*" element={<NotFoundPage />} />

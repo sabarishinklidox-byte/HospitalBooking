@@ -420,7 +420,7 @@ export default function BookingsPage() {
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="CONFIRMED">Confirmed</option>
-              <option value="CANCELLATION_REQUESTED">Refund Requests</option>
+              <option value="CANCEL_REQUESTED">Refund Requests</option>
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="NO_SHOW">No Show</option>

@@ -16,38 +16,27 @@ const formatDateTime = (createdAt) => {
     minute: "2-digit",
   });
 };
+
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0, 
 });
 
-// Use this for EVERY display field
 const formatRupees = (val) => {
   let amount = Number(val || 0);
-  
-  // Logic: If the amount is unusually high (e.g., > 10,000), 
-  // it is likely stored as Paise, so we divide by 100.
   if (amount >= 10000) {
     amount = amount / 100;
   }
-  
   return inr.format(amount);
 };
 
 const formatRupeesFromPaise = (paise) =>
   inr.format(Number(paise || 0) / 100);
 
-
-// ✅ FIX: Use two formatters to handle mismatched units coming from backend
-// Payments list: usually rupees (700 => ₹700)
-
-// Summary & revenuePerDoctor: often returned as paise (50000 => ₹500)
-
 const formatINRFromPaise = (paise) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" })
     .format((Number(paise || 0)) / 100);
-
 
 const getPaymentTypeLabel = (p) => {
   if (p?.notes?.type === "PAY_DIFFERENCE") return "Reschedule ↑";
@@ -60,11 +49,21 @@ const getPaymentTypeLabel = (p) => {
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState([]);
+  const [paymentsPagination, setPaymentsPagination] = useState({ 
+    currentPage: 1, 
+    totalPages: 1, 
+    totalCount: 0 
+  });
+  
   const [summary, setSummary] = useState({
     totalPaid: 0,
     totalRefunded: 0,
     netRevenue: 0,
     revenuePerDoctor: [],
+  });
+  const [summaryPagination, setSummaryPagination] = useState({ 
+    currentPage: 1, 
+    totalPages: 1 
   });
 
   const [loading, setLoading] = useState(true);
@@ -72,6 +71,8 @@ export default function PaymentsPage() {
   const [error, setError] = useState("");
 
   const [doctors, setDoctors] = useState([]);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [summaryPage, setSummaryPage] = useState(1);
 
   const [filters, setFilters] = useState({
     start: "",
@@ -90,16 +91,20 @@ export default function PaymentsPage() {
       status: filters.status || undefined,
       paymentMode: filters.paymentMode || undefined,
       type: filters.type || undefined,
+      page: paymentsPage,
+      limit: 20, // Consistent limit for payments table
     }),
-    [filters]
+    [filters, paymentsPage]
   );
 
   const summaryParams = useMemo(
     () => ({
       start: filters.start || undefined,
       end: filters.end || undefined,
+      page: summaryPage,
+      limit: 10,
     }),
-    [filters.start, filters.end]
+    [filters.start, filters.end, summaryPage]
   );
 
   const fetchDoctors = useCallback(async () => {
@@ -116,27 +121,54 @@ export default function PaymentsPage() {
       setLoading(true);
       setError("");
       const res = await api.get(ENDPOINTS.ADMIN.PAYMENTS, { params: paymentsParams });
-      setPayments(Array.isArray(res.data) ? res.data : []);
+      setPayments(Array.isArray(res.data.data) ? res.data.data : res.data || []);
+      
+      // Handle pagination from backend response
+      if (res.data.pagination) {
+        setPaymentsPagination({
+          currentPage: res.data.pagination.currentPage || paymentsPage,
+          totalPages: res.data.pagination.totalPages || 1,
+          totalCount: res.data.pagination.totalCount || 0,
+        });
+      } else {
+        setPaymentsPagination({
+          currentPage: paymentsPage,
+          totalPages: 1,
+          totalCount: res.data.length || 0,
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.error || "Failed to load payments");
       setPayments([]);
+      setPaymentsPagination({ currentPage: 1, totalPages: 1, totalCount: 0 });
     } finally {
       setLoading(false);
     }
-  }, [paymentsParams]);
+  }, [paymentsParams, paymentsPage]);
 
   const fetchSummary = useCallback(async () => {
     try {
       setSummaryLoading(true);
-      const res = await api.get(ENDPOINTS.ADMIN.PAYMENTS_SUMMARY, { params: summaryParams });
-      setSummary(res.data || { totalPaid: 0, totalRefunded: 0, netRevenue: 0, revenuePerDoctor: [] });
+      const res = await api.get(ENDPOINTS.ADMIN.PAYMENTS_SUMMARY, { 
+        params: summaryParams 
+      });
+      setSummary(res.data);
+      
+      // Handle summary pagination
+      if (res.data.pagination) {
+        setSummaryPagination({
+          currentPage: res.data.pagination.currentPage || summaryPage,
+          totalPages: res.data.pagination.totalPages || 1,
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.error || "Failed to load payments summary");
       setSummary({ totalPaid: 0, totalRefunded: 0, netRevenue: 0, revenuePerDoctor: [] });
+      setSummaryPagination({ currentPage: 1, totalPages: 1 });
     } finally {
       setSummaryLoading(false);
     }
-  }, [summaryParams]);
+  }, [summaryParams, summaryPage]);
 
   useEffect(() => {
     fetchDoctors();
@@ -144,22 +176,56 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     fetchPayments();
+  }, [fetchPayments]);
+
+  useEffect(() => {
     fetchSummary();
-  }, [fetchPayments, fetchSummary]);
+  }, [fetchSummary]);
 
   const handleFilterChange = (e) => {
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    // Reset to page 1 when filters change
+    setPaymentsPage(1);
+    setSummaryPage(1);
   };
 
   const applyFilters = async (e) => {
     e.preventDefault();
+    setPaymentsPage(1);
+    setSummaryPage(1);
     await fetchPayments();
     await fetchSummary();
   };
 
+  const handlePaymentsPageChange = (newPage) => {
+    setPaymentsPage(newPage);
+  };
+
+  const handleSummaryPageChange = (newPage) => {
+    setSummaryPage(newPage);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = (currentPage, totalPages) => {
+    const pages = [];
+    const maxVisible = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   return (
     <ClinicAdminLayout>
-      <div className="w-full max-7xl max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-2">
             Payments Dashboard
@@ -282,14 +348,14 @@ export default function PaymentsPage() {
           </div>
         </div>
 
-        {/* Revenue Per Doctor */}
+        {/* Revenue Per Doctor - With Pagination */}
         {summary.revenuePerDoctor?.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
                 Revenue Per Doctor{" "}
                 <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                  {summary.revenuePerDoctor.length} Doctors
+                  Page {summaryPage} of {summaryPagination.totalPages}
                 </span>
               </h3>
             </div>
@@ -317,10 +383,52 @@ export default function PaymentsPage() {
                 </div>
               ))}
             </div>
+
+            {/* Summary Pagination */}
+            {summaryPagination.totalPages > 1 && (
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Page {summaryPage} of {summaryPagination.totalPages} • Showing {summary.revenuePerDoctor?.length || 0} doctors
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleSummaryPageChange(Math.max(1, summaryPage - 1))}
+                      disabled={summaryPage === 1}
+                      className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <div className="flex items-center space-x-1">
+                      {getPageNumbers(summaryPage, summaryPagination.totalPages).map((pageNum) => (
+                        <button
+                          key={pageNum}
+                          onClick={() => handleSummaryPageChange(pageNum)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            summaryPage === pageNum
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => handleSummaryPageChange(Math.min(summaryPagination.totalPages, summaryPage + 1))}
+                      disabled={summaryPage === summaryPagination.totalPages}
+                      className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Payments Table */}
+        {/* Payments Table - With Pagination */}
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader />
@@ -335,11 +443,10 @@ export default function PaymentsPage() {
             <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-900">
-                  Recent Transactions ({payments.length})
+                  Recent Transactions ({paymentsPagination.totalCount} total)
                 </h3>
                 <span className="text-sm text-gray-500">
-                  {formatDateTime(payments[0]?.createdAt)} -{" "}
-                  {formatDateTime(payments[payments.length - 1]?.createdAt)}
+                  Page {paymentsPage} of {paymentsPagination.totalPages}
                 </span>
               </div>
             </div>
@@ -387,9 +494,7 @@ export default function PaymentsPage() {
 
                       <td className="px-6 py-4">
                         <div className="text-lg font-black text-emerald-600">
-              {formatRupees(p.amount)}
-
-
+                          {formatRupees(p.amount)}
                         </div>
                         {p?.notes?.type === "PAY_DIFFERENCE" && (
                           <div className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full mt-1 inline-block">
@@ -430,6 +535,46 @@ export default function PaymentsPage() {
               </table>
             </div>
 
+            {/* Payments Table Pagination */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Page {paymentsPage} of {paymentsPagination.totalPages} • 
+                  Showing {payments.length} of {paymentsPagination.totalCount} payments
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handlePaymentsPageChange(Math.max(1, paymentsPage - 1))}
+                    disabled={paymentsPage === 1}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    {getPageNumbers(paymentsPage, paymentsPagination.totalPages).map((pageNum) => (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePaymentsPageChange(pageNum)}
+                        className={`w-10 h-10 flex items-center justify-center text-sm font-medium rounded-lg transition-colors shadow-sm ${
+                          paymentsPage === pageNum
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-700 hover:bg-gray-100 bg-white border border-gray-300"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => handlePaymentsPageChange(Math.min(paymentsPagination.totalPages, paymentsPage + 1))}
+                    disabled={paymentsPage === paymentsPagination.totalPages}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

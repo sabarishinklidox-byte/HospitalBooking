@@ -63,32 +63,67 @@ export default function UserLogin() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white font-sans overflow-hidden">
-      {/* LEFT SIDE: Brand Identity */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#002244] flex-col justify-center px-20 relative overflow-hidden">
-        {/* Premium Ambient Background Glow */}
-        <div className="absolute top-[-10%] right-[-10%] w-[40rem] h-[40rem] bg-[#002244] rounded-full blur-[120px] animate-pulse" />
-        
-        <div className="relative z-10">
-          <div className="mb-10 animate-fade-in">
-            <span className="text-teal-400 font-bold tracking-[0.25em] uppercase text-sm block mb-4">Secure Access</span>
-            <h1 className="text-7xl lg:text-8xl font-black tracking-tighter leading-none flex items-center">
-              <ShinyText text="Doc" speed={2.5} color="#2dd4bf" shineColor="#ffffff" delay={0.5} />
-              <ShinyText text="Book" speed={2.5} color="#ffffff" shineColor="#38bdf8" delay={0.8} />
-            </h1>
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: 96 }}
-              transition={{ delay: 1.2, duration: 0.8 }}
-              className="h-2 bg-teal-400 mt-8 rounded-full shadow-[0_0_20px_rgba(45,212,191,0.6)]" 
-            />
-          </div>
+<div className="min-h-screen flex bg-[#f8fafc] font-sans overflow-hidden">
+  {/* LEFT SIDE: Brand Identity */}
+  <div className="hidden lg:flex lg:w-1/2 bg-[#001a33] flex-col justify-center px-16 xl:px-24 relative overflow-hidden">
+  
+  {/* Dynamic Background */}
+  <div className="absolute top-[-20%] left-[-10%] w-[50rem] h-[50rem] bg-sky-600/20 rounded-full blur-[120px] animate-pulse" />
+  <div className="absolute bottom-[-10%] right-[-5%] w-[35rem] h-[35rem] bg-teal-500/10 rounded-full blur-[100px]" />
+  <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#38bdf8 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }} />
 
-          <p className="text-2xl text-blue-100/80 leading-relaxed max-w-md font-semibold italic">
-            "Manage your appointments and medical records in one professional dashboard."
-          </p>
-        </div>
+  <div className="relative z-10">
+    <div className="mb-12">
+      
+      {/* ✅ FIXED: BIG Logo - NO borders, centered */}
+     
+
+      {/* Typography */}
+      <div className="space-y-2">
+        <span className="inline-flex items-center px-4 py-2 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 font-bold tracking-widest uppercase text-sm">
+          <span className="w-2 h-2 bg-sky-400 rounded-full mr-2 animate-ping" />
+          Secure Enterprise Access
+        </span>
+        
+       <h1 className="text-6xl xl:text-[5.5rem] font-black tracking-tighter leading-[1.0] flex flex-col items-start">
+  {/* First Line: Inklidox */}
+  <div className="relative inline-block overflow-visible pb-1">
+    <ShinyText 
+      text="Inklidox" 
+      speed={3} 
+      color="#38bdf8" 
+      shineColor="#ffffff" 
+    />
+  </div>
+
+  {/* Second Line: Bookings */}
+  <div className="relative inline-block overflow-visible mt-[-0.1em]">
+    <ShinyText 
+      text="Bookings" 
+      speed={3} 
+      color="#ffffff" 
+      shineColor="#38bdf8" 
+      delay={0.8} 
+    />
+  </div>
+</h1>
       </div>
+      
+      {/* Divider */}
+      <motion.div 
+        initial={{ width: 0 }}
+        animate={{ width: 140 }}
+        transition={{ delay: 1.2, duration: 1.2 }}
+        className="h-1.5 bg-gradient-to-r from-sky-400 via-teal-400 to-transparent mt-12 rounded-full shadow-[0_0_20px_rgba(56,189,248,0.4)]" 
+      />
+    </div>
+
+    {/* Quote */}
+    <p className="text-xl xl:text-2xl text-slate-200/90 leading-relaxed max-w-lg font-light bg-white/5 backdrop-blur-sm px-6 py-5 rounded-2xl border border-white/10 shadow-xl">
+      "Manage your appointments and medical records in one professional dashboard."
+    </p>
+  </div>
+</div>
 
       {/* RIGHT SIDE: Login Form */}
       <div className="flex-1 flex items-center justify-center p-8 lg:p-16 bg-white relative overflow-y-auto">

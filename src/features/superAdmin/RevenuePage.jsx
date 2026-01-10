@@ -3,15 +3,23 @@ import SuperAdminLayout from '../../layouts/SuperAdminLayout';
 import api from '../../lib/api';
 import { ENDPOINTS } from '../../lib/endpoints';
 import Loader from '../../components/Loader';
+import { useSearchParams } from 'react-router-dom'; // Added for URL sync
 
 export default function RevenuePage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // 1. Get current page from URL or default to 1
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPage = parseInt(searchParams.get('page')) || 1;
+  const limit = 20;
 
   useEffect(() => {
     const fetchRevenue = async () => {
+      setLoading(true);
       try {
-        const res = await api.get(ENDPOINTS.SUPER_ADMIN.REVENUE);
+        // 2. Pass pagination params to the API
+        const res = await api.get(`${ENDPOINTS.SUPER_ADMIN.REVENUE}?page=${currentPage}&limit=${limit}`);
         setData(res.data);
       } catch (err) {
         console.error('Failed to fetch revenue');
@@ -20,7 +28,12 @@ export default function RevenuePage() {
       }
     };
     fetchRevenue();
-  }, []);
+  }, [currentPage]); // Re-run effect when page changes
+
+  // 3. Helper to update URL when page changes
+  const handlePageChange = (newPage) => {
+    setSearchParams({ page: newPage });
+  };
 
   if (loading) return <SuperAdminLayout><Loader /></SuperAdminLayout>;
 
@@ -77,7 +90,30 @@ export default function RevenuePage() {
             ))}
           </tbody>
         </table>
+
+        {/* 4. Pagination Controls */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+          <p className="text-sm text-gray-600 font-medium">
+            Page {data?.pagination?.currentPage || 1} of {data?.pagination?.totalPages || 1}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={!data?.pagination?.hasPrevPage}
+              className="px-4 py-2 text-sm font-semibold bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={!data?.pagination?.hasNextPage}
+              className="px-4 py-2 text-sm font-semibold bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </SuperAdminLayout>
   );
-}
+} 

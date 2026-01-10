@@ -1,4 +1,4 @@
-// pages/admin/PatientHistoryPage.jsx
+// pages/admin/PatientHistoryPage.jsx - FULL FIXED VERSION
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
@@ -69,15 +69,21 @@ export default function PatientHistoryPage() {
     });
   };
 
-  // 🔥 FIXED: Convert paise to rupees
-const formatRupees = (val) => {
-  const num = Math.round(Number(val || 0)); // Rounds 500.0000 to 500
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(num);
-};
+  // 🔥 FIXED: Convert paise to rupees (handles both formats)
+  const formatINR = (val) => {
+    let amount = Number(val || 0);
+    
+    // 🔥 If looks like paise (≥10000), divide by 100
+    if (amount >= 10000) {
+      amount /= 100;
+    }
+    
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
 
   return (
     <ClinicAdminLayout>
@@ -213,28 +219,50 @@ const formatRupees = (val) => {
                                 </span>
                               </td>
 
-                              {/* 🔥 PERFECT Payment History */}
+                              {/* 🔥 PERFECT Payment History - FIXED */}
                               <td className="px-6 py-4 text-xs max-w-[200px]">
+                                {/* 🔥 1. ALWAYS SHOW TIMELINE FIRST (if exists) */}
+                                {Array.isArray(a.paymentTimeline) && a.paymentTimeline.length > 0 && (
+                                  <div className="mb-2 pb-2 border-b border-dashed border-gray-200">
+                                    {a.paymentTimeline
+                                      .slice()
+                                      .sort((x, y) => new Date(x.at) - new Date(y.at))
+                                      .map((t, idx) => (
+                                        <div key={idx} className="text-[11px] text-gray-700 py-0.5">
+                                          <span className="text-gray-500 text-[10px]">
+                                            {formatDateTime(t.at, "date")}
+                                          </span>
+                                          {" • "}
+                                          <span className="font-semibold">{t.type}</span>
+                                          {" • "}
+                                          <span className="font-mono">{formatINR(t.amount)}</span>
+                                          {t.mode && <span className="text-gray-500"> ({t.mode})</span>}
+                                        </div>
+                                      ))}
+                                  </div>
+                                )}
+
+                                {/* 🔥 2. Reschedule actions OR Regular summary */}
                                 {(() => {
-                                  // 🔥 1. Reschedule actions (MOST IMPORTANT)
+                                  // Reschedule actions (MOST IMPORTANT)
                                   if (a.financialStatus && a.financialStatus !== 'NO_CHANGE') {
                                     return (
                                       <div className="space-y-1">
                                         <div className="font-semibold text-sm">
                                           {a.financialStatus === 'PAY_AT_CLINIC' && (
-                                            <span className="text-blue-600">💰 Collect {formatRupees(a.diffAmount || a.amount)}</span>
+                                            <span className="text-blue-600">💰 Collect {formatINR(a.diffAmount || a.amount)}</span>
                                           )}
                                           {a.financialStatus === 'PAY_DIFFERENCE_OFFLINE' && (
-                                            <span className="text-blue-600">💰 Pay {formatRupees(a.diffAmount)} more</span>
+                                            <span className="text-blue-600">💰 Pay {formatINR(a.diffAmount)} more</span>
                                           )}
                                           {a.financialStatus === 'PAY_DIFFERENCE' && (
-                                            <span className="text-blue-600">💳 Pay {formatRupees(a.diffAmount)} online</span>
+                                            <span className="text-blue-600">💳 Pay {formatINR(a.diffAmount)} online</span>
                                           )}
                                           {a.financialStatus === 'FULL_REFUND' && (
-                                            <span className="text-orange-600">💸 Refund FULL {formatRupees(a.diffAmount)}</span>
+                                            <span className="text-orange-600">💸 Refund FULL {formatINR(a.diffAmount)}</span>
                                           )}
                                           {a.financialStatus === 'REFUND_AT_CLINIC' && (
-                                            <span className="text-orange-600">💸 Refund {formatRupees(a.diffAmount)}</span>
+                                            <span className="text-orange-600">💸 Refund {formatINR(a.diffAmount)}</span>
                                           )}
                                           {a.financialStatus === 'FREE_SLOT' && (
                                             <span className="text-green-600">🎁 Free slot</span>
@@ -249,7 +277,7 @@ const formatRupees = (val) => {
                                     );
                                   }
 
-                                  // 🔥 2. Regular booking summary
+                                  // Regular booking summary
                                   const amount = Number(a.amount || a.slot?.price || 0);
                                   const paidAmount = Number(a.paidAmount || 0);
                                   const refundedAmount = Number(a.refundedAmount || 0);
@@ -260,7 +288,7 @@ const formatRupees = (val) => {
                                     return <span className="text-green-600 font-semibold">Free</span>;
                                   }
 
-                                  // 🔥 3. COMPLETE PAYMENT BREAKDOWN
+                                  // COMPLETE PAYMENT BREAKDOWN
                                   return (
                                     <div className="space-y-1">
                                       {/* Headline */}
@@ -269,12 +297,12 @@ const formatRupees = (val) => {
                                         paymentStatus === 'REFUNDED' ? 'text-orange-600' :
                                         'text-gray-600'
                                       }`}>
-                                        {paymentStatus === 'PAID' && `Paid ${formatRupees(paidAmount || amount)}`}
-                                        {paymentStatus === 'REFUNDED' && `Refunded ${formatRupees(refundedAmount || paidAmount)}`}
-                                        {paymentStatus === 'PENDING' && `Pending ${formatRupees(amount)}`}
+                                        {paymentStatus === 'PAID' && `Paid ${formatINR(paidAmount || amount)}`}
+                                        {paymentStatus === 'REFUNDED' && `Refunded ${formatINR(refundedAmount || paidAmount)}`}
+                                        {paymentStatus === 'PENDING' && `Pending ${formatINR(amount)}`}
                                         {paymentStatus === 'PAID' && paidAmount < amount && (
                                           <span className="text-amber-600 ml-1">
-                                            (+{formatRupees(amount - paidAmount)} pending)
+                                            (+{formatINR(amount - paidAmount)} pending)
                                           </span>
                                         )}
                                         <span className="text-gray-500 ml-1">({mode})</span>
@@ -283,12 +311,12 @@ const formatRupees = (val) => {
                                       {/* Breakdown */}
                                       {paidAmount > 0 && (
                                         <div className="text-[10px] text-gray-500">
-                                          Paid: <span className="font-semibold text-green-700">{formatRupees(paidAmount)}</span>
+                                          Paid: <span className="font-semibold text-green-700">{formatINR(paidAmount)}</span>
                                         </div>
                                       )}
                                       {refundedAmount > 0 && (
                                         <div className="text-[10px] text-gray-500">
-                                          Refunded: <span className="font-semibold text-orange-700">{formatRupees(refundedAmount)}</span>
+                                          Refunded: <span className="font-semibold text-orange-700">{formatINR(refundedAmount)}</span>
                                         </div>
                                       )}
                                       {a.paymentUpdatedAt && (

@@ -12,6 +12,8 @@ export default function ClinicsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [counts, setCounts] = useState({ active: 0, inactive: 0 });
+
   const [pagination, setPagination] = useState({
     total: 0,
     limit: 12,
@@ -22,42 +24,43 @@ export default function ClinicsPage() {
   const navigate = useNavigate();
 
   // ✅ Fetch Clinics with Search & Pagination
-  const fetchClinics = async (searchQuery = '', currentPage = 1) => {
-    try {
-      setLoading(true);
-      const res = await api.get(ENDPOINTS.SUPER_ADMIN.CLINICS, {
-        params: {
-          search: searchQuery,
-          page: currentPage,
-          limit: 12, // Using 12 for better grid alignment
-        },
-      });
+ const fetchClinics = async (searchQuery = '', currentPage = 1) => {
+  try {
+    setLoading(true);
+    const res = await api.get(ENDPOINTS.SUPER_ADMIN.CLINICS, {
+      params: {
+        search: searchQuery,
+        page: currentPage,
+        limit: 12,
+      },
+    });
 
-      if (Array.isArray(res.data)) {
-        // Handle legacy API response (array)
-        setClinics(res.data);
-        setPagination({
-          total: res.data.length,
-          limit: 12,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPrevPage: false,
-        });
-      } else if (res.data?.data) {
-        // Handle new API response (paginated object)
-        setClinics(Array.isArray(res.data.data) ? res.data.data : []);
-        setPagination(res.data.pagination || {});
-      } else {
-        setClinics([]);
-      }
-    } catch (err) {
-      console.error('Fetch error:', err);
-      toast.error('Failed to load clinics');
+    if (Array.isArray(res.data)) {
+      // Legacy
+      setClinics(res.data);
+      setPagination({ total: res.data.length, limit: 12, totalPages: 1 });
+      setCounts({ active: 0, inactive: 0 });  // No counts in legacy
+    } else if (res.data?.data) {
+      // ✅ NEW API - handle counts + pagination
+      setClinics(Array.isArray(res.data.data) ? res.data.data : []);
+      setPagination(res.data.pagination || {});
+      
+      // 🔥 NEW: Extract counts
+      setCounts(res.data.counts || { active: 0, inactive: 0 });
+    } else {
       setClinics([]);
-    } finally {
-      setLoading(false);
+      setCounts({ active: 0, inactive: 0 });
     }
-  };
+  } catch (err) {
+    console.error('Fetch error:', err);
+    toast.error('Failed to load clinics');
+    setClinics([]);
+    setCounts({ active: 0, inactive: 0 });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Initial Load
   useEffect(() => {
@@ -109,20 +112,47 @@ export default function ClinicsPage() {
             </div>
 
             {/* Stats Bar */}
-            <div className="flex flex-wrap gap-4 mt-6">
-              <div className="px-5 py-3 bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3">
-                <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Total Clinics</p>
-                  <p className="text-2xl font-bold text-gray-900">{pagination.total || clinics.length}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        
+  {/* 🔥 Total */}
+ <div className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg border border-gray-200 shadow-sm flex-1 min-w-[160px]">
+    <div className="p-2 bg-blue-50 rounded-md text-blue-600">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    </div>
+    <div className="leading-tight">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Total</p>
+      <p className="text-lg font-bold text-gray-900">{counts.total || pagination.total || clinics.length}</p>
+    </div>
+  </div>
+
+  {/* Active Card - Compact */}
+  <div className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg border border-green-100 shadow-sm flex-1 min-w-[160px]">
+    <div className="p-2 bg-green-50 rounded-md text-green-600">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    <div className="leading-tight">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Active</p>
+      <p className="text-lg font-bold text-green-600">{counts.active || 0}</p>
+    </div>
+  </div>
+
+  {/* Inactive Card - Compact */}
+  <div className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg border border-red-100 shadow-sm flex-1 min-w-[160px]">
+    <div className="p-2 bg-red-50 rounded-md text-red-600">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </div>
+    <div className="leading-tight">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Inactive</p>
+      <p className="text-lg font-bold text-red-600">{counts.inactive || 0}</p>
+    </div>
+  </div>
+</div>
+
 
           {/* Search Bar */}
           <div className="mb-8">

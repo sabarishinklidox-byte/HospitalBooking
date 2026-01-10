@@ -49,6 +49,7 @@ export default function DoctorLayout({ children }) {
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
           {[
             { to: '/doctor/dashboard', label: '📊 Dashboard' },
+              { to: '/doctor/calendar', label: '📅 Calendar' },
             { to: '/doctor/appointments', label: '📅 Appointments' },
             { to: '/doctor/reviews', label: '⭐ My Reviews' },
             { to: '/doctor/profile', label: '👤 My Profile' },

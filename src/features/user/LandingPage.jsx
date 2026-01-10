@@ -71,71 +71,69 @@ export default function LandingPage() {
    const [cities, setCities] = useState([]);
 const [city, setCity] = useState('');
 
-  const fetchClinics = async (q = "") => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api.get(ENDPOINTS.PUBLIC.CLINICS, {
-        params: {
-          q: q || undefined,
-          _t: Date.now(),
-        },
-      });
+ // ✅ FIXED fetchClinics - Accepts { q, city } + sends city param
+const fetchClinics = async ({ q = '', city = '' }) => {
+  console.log('🚀 Frontend CALLING fetchClinics:', { q, city });
+  
+  setLoading(true);
+  setError("");
+  try {
+    const res = await api.get(ENDPOINTS.PUBLIC.CLINICS, {
+      params: {
+        q: q || undefined,
+        city,  // 🔥 SENDS CITY TO BACKEND
+        _t: Date.now(),
+      },
+    });
 
-      const list = Array.isArray(res.data)
-        ? res.data
-        : res.data?.data || res.data?.clinics || [];
+    const list = Array.isArray(res.data)
+      ? res.data
+      : res.data?.data || res.data?.clinics || [];
 
-      setClinics(list);
-    } catch (err) {
-      console.error("Clinic fetch error:", err);
-      setError("Failed to load clinics. Please refresh the page.");
-    } finally {
-      setLoading(false);
+    setClinics(list);
+  } catch (err) {
+    console.error("Clinic fetch error:", err);
+    setError("Failed to load clinics. Please refresh the page.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ✅ SINGLE DEBOUNCED useEffect (replaces 3 broken ones)
+useEffect(() => {
+  const id = setTimeout(() => {
+    fetchClinics({ q: search, city });  // ✅ city param (not cityParam)
+  }, 300);
+  return () => clearTimeout(id);
+}, [search, city]);  // ✅ Triggers on search + city change
+
+const fetchCities = async () => {
+  try {
+    const res = await api.get(ENDPOINTS.PUBLIC.CLINIC_CITIES, { params: { _t: Date.now() } });
+    
+    const rawList = res.data?.cities || [];
+    const uniqueCities = Array.from(new Set(
+      rawList.map(city => city.trim().toLowerCase())
+    )).map(city => city.charAt(0).toUpperCase() + city.slice(1));
+
+    setCities(uniqueCities);
+
+    // 🔥 Sets default + fetches with city
+    if (!localStorage.getItem('city') && uniqueCities.length) {
+      const defaultCity = uniqueCities[0];
+      setCity(defaultCity);
+      localStorage.setItem('city', defaultCity);
+      fetchClinics({ q: '', city: defaultCity });  // ✅ Works now
     }
-  };
+  } catch (err) {
+    console.error("Cities fetch error:", err);
+  }
+};
 
-  useEffect(() => {
-    fetchClinics();
-  }, []);
+useEffect(() => {
+  fetchCities();
+}, []);  // ✅ Initial load
 
-  useEffect(() => {
-    const id = setTimeout(() => fetchClinics(search), 300);
-    return () => clearTimeout(id);
-  }, [search]);
-
-  const fetchCities = async () => {
-    try {
-      const res = await api.get(ENDPOINTS.PUBLIC.CLINIC_CITIES, { params: { _t: Date.now() } });
-      console.log("CLINIC_CITIES endpoint:", ENDPOINTS.PUBLIC.CLINIC_CITIES);
-
-      const list = res.data?.cities || [];
-      setCities(Array.isArray(list) ? list : []);
-      // set default city if empty
-      if (!localStorage.getItem('city') && list?.length) {
-        setCity(list[0]);
-      }
-    } catch (err) {
-      console.error("Cities fetch error:", err);
-    }
-  };
-   useEffect(() => {
-    fetchCities();
-  }, []);
-
-  // 2) persist city + refetch clinics when city changes
-  useEffect(() => {
-    if (city) localStorage.setItem('city', city);
-    fetchClinics({ q: search, cityParam: city });
-  }, [city]); // keep this only for city change
-
-  // 3) debounce search (keep your pattern)
-  useEffect(() => {
-    const id = setTimeout(() => {
-      fetchClinics({ q: search, cityParam: city });
-    }, 300);
-    return () => clearTimeout(id);
-  }, [search, city]);
   return (
     <UserLayout>
       {/* --- Hero Section --- */}

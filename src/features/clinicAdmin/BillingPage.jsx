@@ -39,6 +39,8 @@
     const [loading, setLoading] = useState(true);
     const [upgradingPlanId, setUpgradingPlanId] = useState(null);
     const [timeLeft, setTimeLeft] = useState(null);
+    const [trialDaysLeft, setTrialDaysLeft] = useState(null);
+const [trialEndDate, setTrialEndDate] = useState(null);
 
     useEffect(() => {
       if (currentSubscription?.startDate && currentSubscription?.durationDays) {
@@ -50,6 +52,20 @@
         return () => clearInterval(interval);
       }
     }, [currentSubscription]);
+    useEffect(() => {
+  if (currentSubscription?.trialDays && currentSubscription?.startDate) {
+    const updateTrialTimer = () => {
+      setTrialDaysLeft(calculateTimeLeft(currentSubscription.startDate, currentSubscription.trialDays));
+    };
+    const trialExpiry = new Date(currentSubscription.startDate);
+    trialExpiry.setDate(trialExpiry.getDate() + currentSubscription.trialDays);
+    setTrialEndDate(trialExpiry.toLocaleDateString() + ' ' + trialExpiry.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    
+    updateTrialTimer();
+    const interval = setInterval(updateTrialTimer, 60000);
+    return () => clearInterval(interval);
+  }
+}, [currentSubscription]);
 
     const isExpiredNow = isExpiredStatus || timeLeft?.expired;
 
@@ -126,6 +142,29 @@
             <h1 className="text-3xl font-bold text-gray-900">Subscription & Billing</h1>
             <p className="text-sm text-gray-500 mt-1">Manage your subscription plan for {clinic?.name}.</p>
           </div>
+{/* TRIAL INFO CARD */}
+{currentSubscription?.trialDays > 0 && (
+  <div className={`rounded-xl shadow-sm border p-6 mb-8 flex flex-col md:flex-row items-center justify-between transition-colors duration-500 bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200`}>
+    <div>
+      <h2 className="text-lg font-bold flex items-center gap-2 text-emerald-900">
+        ⏳ Trial Active
+      </h2>
+      <p className="text-sm text-emerald-700 mt-1">
+        {trialDaysLeft?.days || 0}d {trialDaysLeft?.hours || 0}h {trialDaysLeft?.minutes || 0}m left
+      </p>
+      <p className="text-sm text-emerald-700">Started: {new Date(currentSubscription.startDate).toLocaleDateString()}</p>
+      <p className="text-sm text-emerald-700">Ends: <strong>{trialEndDate}</strong></p>
+    </div>
+    <div className="mt-4 md:mt-0 flex gap-3 text-center">
+      {[{v: trialDaysLeft?.days || 0, l: 'Days'}, {v: trialDaysLeft?.hours || 0, l: 'Hours'}, {v: trialDaysLeft?.minutes || 0, l: 'Mins'}].map(i => (
+        <div key={i.l} className="bg-white p-3 rounded-lg shadow-sm w-20 border border-emerald-100">
+          <div className="text-2xl font-bold text-emerald-600">{i.v}</div>
+          <div className="text-[10px] uppercase text-emerald-500 font-bold tracking-wider">{i.l}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
           {/* TIME REMAINING CARD */}
           {currentPlan && currentSubscription && (
@@ -181,6 +220,7 @@
 
                 return (
                   <div key={plan.id} className={`flex flex-col rounded-lg border p-5 text-sm transition-all h-full ${isCurrent ? 'border-blue-500 ring-2 ring-blue-200/50 shadow-lg bg-blue-50/50' : 'border-gray-200 shadow-sm hover:shadow-md'}`}>
+                    
                     {trialDays > 0 && (
                       <div className="mb-4 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
                         <span className="text-xs font-bold text-emerald-800">+{trialDays} Days FREE Trial</span>
@@ -196,6 +236,11 @@
                     <ul className="space-y-2 mb-6 text-gray-600 flex-grow">
                       <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>Up to {plan.maxDoctors} doctors</li>
                       <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>{plan.maxBookingsPerMonth} bookings / period</li>
+                        {plan.enableGoogleCalendarSync && (
+    <li className="flex items-center gap-2 text-green-700 font-medium">
+      <span className="text-green-500 font-bold">✓</span> Google Calendar Sync
+    </li>
+  )}
                       {plan.enableGoogleReviews && <li className="flex items-center gap-2 text-green-700 font-medium"><span className="text-green-500 font-bold">✓</span> Google Ratings & Reviews</li>}
                       {plan.allowOnlinePayments && <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>Online payments</li>}
                     </ul>

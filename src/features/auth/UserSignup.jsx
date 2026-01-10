@@ -105,46 +105,72 @@ export default function UserSignup() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white font-sans overflow-hidden">
-      {/* LEFT SIDE: Brand & Info */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#002244] flex-col justify-center px-20 relative overflow-hidden">
-        <div className="absolute top-[-5%] right-[-5%] w-[35rem] h-[35rem] bg-[#002244] rounded-full blur-[100px] animate-pulse" />
+ <div className="min-h-screen flex bg-[#001a33] font-sans overflow-x-hidden">
+  {/* LEFT SIDE: Brand & Info */}
+  <div className="hidden lg:flex lg:w-1/2 bg-[#001a33] flex-col justify-center px-8 xl:px-24 relative overflow-hidden border-r border-white/5">
+    
+    {/* Background Accents - Matching Login Page Colors */}
+    <div className="absolute top-[-10%] right-[-10%] w-[40rem] h-[40rem] bg-sky-600/10 rounded-full blur-[120px] animate-pulse" />
+    <div className="absolute bottom-[-5%] left-[-5%] w-[30rem] h-[30rem] bg-teal-500/10 rounded-full blur-[100px]" />
+
+    <div className="relative z-10 w-full max-w-xl">
+      <div className="mb-8">
+        <motion.span 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-teal-400 font-bold tracking-[0.3em] uppercase text-xs block mb-4"
+        >
+          Welcome to
+        </motion.span>
         
-        <div className="relative z-10">
-          <div className="mb-10">
-            <motion.span 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="text-teal-400 font-bold tracking-[0.3em] uppercase text-sm block mb-4"
-            >
-              Welcome to
-            </motion.span>
-            
-            <h1 className="text-7xl lg:text-8xl font-black tracking-tighter leading-none flex items-center">
-              {/* Sequential shine: Book starts after Doc is midway through */}
-              <ShinyText text="Doc" speed={2} color="#2dd4bf" shineColor="#ffffff" delay={0.5} />
-              <ShinyText text="Book" speed={2} color="#ffffff" shineColor="#38bdf8" delay={0.8} />
-            </h1>
-            
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: 96 }}
-              transition={{ delay: 1.2, duration: 0.8 }}
-              className="h-2 bg-teal-400 mt-8 rounded-full shadow-[0_0_20px_rgba(45,212,191,0.6)]" 
-            />
-          </div>
+        {/* Adjusted sizes for responsiveness: text-5xl on small laptops, 7xl on desktops */}
+        <h1 className="text-5xl xl:text-7xl font-black tracking-tighter leading-[1.1] flex flex-col">
+          <ShinyText 
+            text="Inklidox" 
+            speed={2} 
+            color="#38bdf8" 
+            shineColor="#ffffff" 
+            delay={0.5} 
+          />
+          <ShinyText 
+            text="Bookings" 
+            speed={2} 
+            color="#ffffff" 
+            shineColor="#38bdf8" 
+            delay={0.8} 
+          />
+        </h1>
+        
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: 80 }}
+          transition={{ delay: 1.2, duration: 0.8 }}
+          className="h-1.5 bg-gradient-to-r from-teal-400 to-sky-500 mt-6 rounded-full shadow-[0_0_20px_rgba(45,212,191,0.4)]" 
+        />
+      </div>
 
-          <p className="text-2xl text-blue-100/80 leading-relaxed mb-16 max-w-md font-semibold">
-            Join India's premium healthcare network. Connect with world-class specialists in clicks.
-          </p>
+      {/* Hero Subtext - Reduced font size slightly for better fit */}
+      <p className="text-lg xl:text-xl text-blue-100/70 leading-relaxed mb-12 font-medium italic border-l-2 border-teal-500/30 pl-6">
+        "Join India's premium healthcare network. Connect with world-class specialists in clicks."
+      </p>
 
-          <div className="grid grid-cols-3 gap-8">
-            <CountUp end="50K+" label="Patients" delay={1500} />
-            <CountUp end="500+" label="Doctors" delay={1800} />
-            <CountUp end="100+" label="Cities" delay={2100} />
-          </div>
+      {/* Stats Section - Responsive Grid */}
+      <div className="grid grid-cols-3 gap-4 xl:gap-8">
+        <div className="flex flex-col">
+          <CountUp end="50K+" className="text-2xl xl:text-3xl font-bold text-white" />
+          <span className="text-teal-400/60 text-xs uppercase tracking-widest font-bold mt-1">Patients</span>
+        </div>
+        <div className="flex flex-col">
+          <CountUp end="500+" className="text-2xl xl:text-3xl font-bold text-white" />
+          <span className="text-teal-400/60 text-xs uppercase tracking-widest font-bold mt-1">Doctors</span>
+        </div>
+        <div className="flex flex-col">
+          <CountUp end="100+" className="text-2xl xl:text-3xl font-bold text-white" />
+          <span className="text-teal-400/60 text-xs uppercase tracking-widest font-bold mt-1">Cities</span>
         </div>
       </div>
+    </div>
+  </div>
 
       {/* RIGHT SIDE: Signup Form */}
       <div className="flex-1 flex items-center justify-center p-8 lg:p-16 bg-white relative overflow-y-auto">

@@ -594,22 +594,23 @@ theme: { color: '#0b3b5e' },
                                         </div>
                                         
                                         {/* 🔥 PERFECT STATUS HIERARCHY */}
-                                        {slot.isBooked ? (
-                                          <div className="text-[10px] mt-0.5 text-red-400 font-medium">Booked</div>
-                                        ) : slot.isClinicPending ? (
-                                          <div className="text-[10px] mt-0.5 text-yellow-600 font-medium">Pending</div>
-                                        ) : isOtherHold ? (
-                                          <div className="text-[10px] mt-0.5 text-amber-600 font-medium animate-pulse">Hold</div>
-                                        ) : isMyHold ? (
-                                          <div className="text-[10px] mt-0.5 text-blue-600 font-medium animate-pulse">
-                                            Your Hold
-                                          </div>
-                                        ) : (
-                                          <div className="text-[10px] mt-0.5 text-gray-400">
-                                            {isFree ? 'Free' : formatPrice(slot.price)}
-                                          </div>
-                                        )}
-                                      </button>
+   
+  {slot.isBooked ? (
+  <div className="text-[10px] mt-0.5 text-red-500 font-bold">Booked</div>
+) : slot.isPassed ? (                    // 🔥 AFTER booked
+  <div className="text-[10px] mt-0.5 text-gray-500 font-medium">Passed</div>
+) : slot.isClinicPending ? (
+  <div className="text-[10px] mt-0.5 text-yellow-600 font-medium">Pending</div>
+) : isOtherHold ? (
+  <div className="text-[10px] mt-0.5 text-amber-600 font-bold animate-pulse">Hold</div>
+) : isMyHold ? (
+  <div className="text-[10px] mt-0.5 text-blue-600 font-bold animate-pulse">Your Hold</div>
+) : (
+  <div className="text-[10px] mt-0.5 text-emerald-600 font-medium">
+    {isFree ? 'Free' : formatPrice(slot.price)}
+  </div>
+)}
+</button>
                                   );
                               })}
                           </div>

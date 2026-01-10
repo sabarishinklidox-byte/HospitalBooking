@@ -14,28 +14,29 @@ export default function PlansPage() {
   const navigate = useNavigate();
 
   const emptyForm = {
-    name: '',
-    slug: '',
-    priceMonthly: 0,
-    currency: 'INR',
-    maxDoctors: 1,
-    maxBookingsPerMonth: 100,
-    allowOnlinePayments: false,
-    allowCustomBranding: false,
-    
-    // Feature Flags
-    enableReviews: true,        // ✅ RESTORED: Internal Website Reviews
-    enableGoogleReviews: false, // Google API Ratings
-    allowEmbedReviews: false,   // Embed Code Widget
-    
-    enableBulkSlots: true,
-    enableExports: true,
-    enableAuditLogs: true,
-    isActive: true,
-    isTrial: false,
-    durationDays: '',
-    trialDays: '',
-  };
+  name: '',
+  slug: '',
+  priceMonthly: 0,
+  currency: 'INR',
+  maxDoctors: 1,
+  maxBookingsPerMonth: 100,
+  allowOnlinePayments: false,
+  allowCustomBranding: false,
+  
+  // Feature Flags
+  enableReviews: true,        
+  enableGoogleReviews: false, 
+  enableGoogleCalendarSync: false,  // ✅ NEW Premium toggle
+  allowEmbedReviews: false,   
+
+  enableBulkSlots: true,
+  enableExports: true,
+  enableAuditLogs: true,
+  isActive: true,
+  isTrial: false,
+  durationDays: '',
+  trialDays: '',
+};
 
   const [form, setForm] = useState(emptyForm);
 const loadPlans = async () => {
@@ -109,7 +110,7 @@ const loadPlans = async () => {
       enableReviews: plan.enableReviews ?? true,             // ✅ RESTORED
       enableGoogleReviews: !!plan.enableGoogleReviews,
       allowEmbedReviews: !!plan.allowEmbedReviews,
-      
+       enableGoogleCalendarSync: !!plan.enableGoogleCalendarSync,
       enableBulkSlots: plan.enableBulkSlots ?? true,
       enableExports: plan.enableExports ?? true,
       enableAuditLogs: plan.enableAuditLogs ?? true,
@@ -127,46 +128,48 @@ const loadPlans = async () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editing) {
-        const payload = {
-          name: form.name,
-          slug: form.slug,
-          currency: form.currency,
-          allowOnlinePayments: form.allowOnlinePayments,
-          allowCustomBranding: form.allowCustomBranding,
-          
-          enableReviews: form.enableReviews,             // ✅ RESTORED
-          enableGoogleReviews: form.enableGoogleReviews,
-          allowEmbedReviews: form.allowEmbedReviews,
-          
-          enableBulkSlots: form.enableBulkSlots,
-          enableExports: form.enableExports,
-          enableAuditLogs: form.enableAuditLogs,
-          isActive: form.isActive,
-        };
-        await api.put(ENDPOINTS.SUPER_ADMIN.PLAN_BY_ID(editing), payload);
-        toast.success('Plan updated');
-      } else {
-        const payload = {
-          ...form,
-          priceMonthly: Number(form.priceMonthly),
-          maxDoctors: Number(form.maxDoctors),
-          maxBookingsPerMonth: Number(form.maxBookingsPerMonth),
-          durationDays: form.durationDays === '' ? null : Number(form.durationDays),
-          trialDays: form.trialDays === '' ? null : Number(form.trialDays),
-        };
-        await api.post(ENDPOINTS.SUPER_ADMIN.PLANS, payload);
-        toast.success('Plan created');
-      }
-
-      await loadPlans();
-      handleCancelEdit();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to save plan');
+  e.preventDefault();
+  try {
+    if (editing) {
+      const payload = {
+        name: form.name,
+        slug: form.slug,
+        currency: form.currency,
+        allowOnlinePayments: form.allowOnlinePayments,
+        allowCustomBranding: form.allowCustomBranding,
+        
+        enableReviews: form.enableReviews,
+        enableGoogleReviews: form.enableGoogleReviews,
+        allowEmbedReviews: form.allowEmbedReviews,
+        enableGoogleCalendarSync: form.enableGoogleCalendarSync,  // ✅ NEW Premium
+        
+        enableBulkSlots: form.enableBulkSlots,
+        enableExports: form.enableExports,
+        enableAuditLogs: form.enableAuditLogs,
+        isActive: form.isActive,
+      };
+      await api.put(ENDPOINTS.SUPER_ADMIN.PLAN_BY_ID(editing), payload);
+      toast.success('Plan updated');
+    } else {
+      const payload = {
+        ...form,
+        priceMonthly: Number(form.priceMonthly),
+        maxDoctors: Number(form.maxDoctors),
+        maxBookingsPerMonth: Number(form.maxBookingsPerMonth),
+        durationDays: form.durationDays === '' ? null : Number(form.durationDays),
+        trialDays: form.trialDays === '' ? null : Number(form.trialDays),
+      };
+      await api.post(ENDPOINTS.SUPER_ADMIN.PLANS, payload);
+      toast.success('Plan created');
     }
-  };
+
+    await loadPlans();
+    handleCancelEdit();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to save plan');
+  }
+};
+
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this plan?')) return;
@@ -335,6 +338,16 @@ const loadPlans = async () => {
                         />
                         <span className="text-sm text-gray-700">Internal Website Reviews</span>
                     </label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+    <input
+        type="checkbox"
+        name="enableGoogleCalendarSync"
+        checked={form.enableGoogleCalendarSync}
+        onChange={handleChange}
+        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+    />
+    <span className="text-sm text-gray-700">Google Calendar Sync</span>
+</label>
 
                     {/* 2. Google Ratings */}
                     <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
@@ -447,6 +460,7 @@ const loadPlans = async () => {
                                 {p.enableReviews && <Badge label="Internal-Rev" color="purple" />}
                                 {p.enableGoogleReviews && <Badge label="G-Ratings" color="green" />}
                                 {p.allowEmbedReviews && <Badge label="Embed-Widget" color="teal" />}
+                                  {p.enableGoogleCalendarSync && <Badge label="G-Cal" color="blue" />}
 
                                 {p.enableBulkSlots && <Badge label="Bulk Slots" color="gray" />}
                                 {p.enableExports && <Badge label="Exports" color="gray" />}
