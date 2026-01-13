@@ -718,15 +718,24 @@ const paymentLabel = (() => {
   })();
 
   // ✅ Actions rules
-  const canReschedule = ["CONFIRMED", "PENDING"].includes(appointmentStatus);
 
-  const baseCanCancel = ["CONFIRMED", "PENDING", "PENDING_PAYMENT"].includes(
-    appointmentStatus
-  );
-  const cancelAlreadyRequested = appointmentStatus === "CANCEL_REQUESTED";
-  const alreadyRefunded = paymentStatus === "REFUNDED";
-  const canShowCancelButton =
-    baseCanCancel && !isRescheduled && !cancelAlreadyRequested && !alreadyRefunded;
+
+const baseCanCancel = ["CONFIRMED", "PENDING", "PENDING_PAYMENT"].includes(appointmentStatus);
+const cancelAlreadyRequested = appointmentStatus === "CANCEL_REQUESTED";
+const alreadyRefunded = paymentStatus === "REFUNDED";
+const isCancellationRejected = app?.cancellationRequest?.status === "REJECTED";
+
+const canReschedule = ["CONFIRMED", "PENDING"].includes(appointmentStatus) 
+  && !cancelAlreadyRequested 
+  && !isCancellationRejected 
+  && !alreadyRefunded;
+
+const canShowCancelButton = baseCanCancel 
+  && !isRescheduled 
+  && !cancelAlreadyRequested 
+  && !alreadyRefunded 
+  && !isCancellationRejected;  // 🔥 ADD THIS LINE
+
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col gap-5 transition-all hover:shadow-md hover:border-blue-300">

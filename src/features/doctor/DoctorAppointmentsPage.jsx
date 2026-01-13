@@ -138,40 +138,32 @@ export default function DoctorAppointmentsPage() {
               </p>
             ) : (
               filteredAppointments.map((app) => (
-                <div
-                  key={app.id}
-                  className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition"
-                >
-                  <div className="flex flex-col sm:flex-row justify-between gap-4">
-                    {/* Patient Info */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-800">
-                        {app.user?.name || 'Unknown Patient'}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        📅{' '}
-                        {new Date(app.slot.date).toLocaleDateString()} at{' '}
-                        <span className="font-mono text-black font-bold">
-                          {app.slot.time}
-                        </span>
-                      </p>
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded mt-2 inline-block
-                          ${
-                            app.status === 'CONFIRMED'
-                              ? 'bg-green-100 text-green-700'
-                              : app.status === 'PENDING'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : app.status === 'COMPLETED'
-                              ? 'bg-blue-100 text-blue-700'
-                              : app.status === 'NO_SHOW'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-gray-100'
-                          }`}
-                      >
-                        {app.status}
-                      </span>
-                    </div>
+  <div key={app.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition">
+    <div className="flex flex-col sm:flex-row justify-between gap-4">
+      <div>
+        <h3 className="font-bold text-lg text-gray-800">
+          {app.user?.name || 'Unknown Patient'}
+        </h3>
+        <p className="text-sm text-gray-500">
+          📅{' '}
+          {app.slot?.date 
+            ? new Date(app.slot.date).toLocaleDateString('en-IN') 
+            : 'Date unavailable'
+          } at{' '}
+          <span className="font-mono text-black font-bold">
+            {app.slot?.time || 'Time unavailable'}
+          </span>
+        </p>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded mt-2 inline-block ${
+          app.status === 'CONFIRMED' ? 'bg-green-100 text-green-700'
+          : app.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700'
+          : app.status === 'COMPLETED' ? 'bg-blue-100 text-blue-700'
+          : app.status === 'NO_SHOW' ? 'bg-red-100 text-red-700'
+          : 'bg-gray-100 text-gray-500'
+        }`}>
+          {app.status || 'Unknown'}
+        </span>
+      </div>
 
                     {/* Actions */}
                     <div className="flex flex-col items-end gap-2">

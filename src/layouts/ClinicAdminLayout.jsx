@@ -13,43 +13,77 @@ export default function ClinicAdminLayout({ children }) {
   // --- CONTEXT DATA ---
   const { plan, clinic, loading, unreadNotifs, refreshUnread } = useAdminContext() || {};
 
+// useEffect(() => {
+
+
+//   if (loading || !clinic) return;
+
+//   const sub = clinic.subscription;
+//   const status = sub?.status?.toUpperCase();
+//     // DEBUG: see what layout gets
+
+//   const isInvalid =
+//   !sub || ['EXPIRED', 'INACTIVE', 'CANCELLED', 'PAST_DUE'].includes(status);
+
+//   if (isInvalid) {
+//     const allowedPaths = [
+//       '/admin/billing',
+//       '/admin/profile',
+//       '/admin/payment-settings',
+//       '/admin/settings',
+//       '/admin/payments',
+//       '/admin/audit-logs',
+//       '/admin/dashboard',
+//       '/admin/payment-success',
+//       '/admin/payment-failure',
+//       '/admin/subscription/callback',
+//     ];
+
+//     const isAllowed = allowedPaths.some(path => location.pathname.startsWith(path));
+
+//     if (!isAllowed) {
+//       console.warn(`⛔ Access Denied (Status: ${status}). Redirecting to billing.`);
+//       navigate('/admin/billing', { replace: true });
+//     }
+//   }
+// }, [clinic, loading, location.pathname, navigate]);
+
+
+  // --- HELPER: Get group from URL (for deep linking) ---
 useEffect(() => {
-
   if (loading || !clinic) return;
-
   const sub = clinic.subscription;
-  const status = sub?.status?.toUpperCase();
-    // DEBUG: see what layout gets
+  const now = new Date();
+  
+  let trialExpired = false;
+  if (sub?.trialDays > 0 && sub.startDate) {
+    const trialEnd = new Date(sub.startDate);
+    trialEnd.setDate(trialEnd.getDate() + sub.trialDays);
+    trialExpired = now > trialEnd;
+  }
+  
+  let planExpired = false;
+  if (sub?.durationDays > 0 && sub.startDate) {
+    const planEnd = new Date(sub.startDate);
+    planEnd.setDate(planEnd.getDate() + sub.durationDays);
+    planExpired = now > planEnd;
+  }
 
-  const isInvalid =
-  !sub || ['EXPIRED', 'INACTIVE', 'CANCELLED', 'PAST_DUE'].includes(status);
+  const isInvalid = !sub || 
+    ['EXPIRED', 'INACTIVE', 'CANCELLED', 'PAST_DUE'].includes(sub.status?.toUpperCase()) ||
+    trialExpired ||
+    planExpired;
 
   if (isInvalid) {
-    const allowedPaths = [
-      '/admin/billing',
-      '/admin/profile',
-      '/admin/payment-settings',
-      '/admin/settings',
-      '/admin/payments',
-      '/admin/audit-logs',
-      '/admin/dashboard',
-      '/admin/payment-success',
-      '/admin/payment-failure',
-      '/admin/subscription/callback',
-    ];
-
+    const allowedPaths = ['/admin/billing', '/admin/payments'];
     const isAllowed = allowedPaths.some(path => location.pathname.startsWith(path));
-
     if (!isAllowed) {
-      console.warn(`⛔ Access Denied (Status: ${status}). Redirecting to billing.`);
       navigate('/admin/billing', { replace: true });
     }
   }
 }, [clinic, loading, location.pathname, navigate]);
-
-
-  // --- HELPER: Get group from URL (for deep linking) ---
-  const getGroupFromPath = (path) => {
+  
+ const getGroupFromPath = (path) => {
     if (path.includes('/appointments') || path.includes('/slots') || path.includes('/bookings')) return 'Scheduling';
     
     // ✅ CHANGED: Added '/specialities' to Team group

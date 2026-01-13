@@ -38,21 +38,26 @@
     const [plans, setPlans] = useState([]);
     const [loading, setLoading] = useState(true);
     const [upgradingPlanId, setUpgradingPlanId] = useState(null);
-    const [timeLeft, setTimeLeft] = useState(null);
+ 
     const [trialDaysLeft, setTrialDaysLeft] = useState(null);
 const [trialEndDate, setTrialEndDate] = useState(null);
+// ONE TIMER LOGIC - Match your cron/backend
+const [timeLeft, setTimeLeft] = useState(null);
 
-    useEffect(() => {
-      if (currentSubscription?.startDate && currentSubscription?.durationDays) {
-        const updateTimer = () => {
-          setTimeLeft(calculateTimeLeft(currentSubscription.startDate, currentSubscription.durationDays));
-        };
-        updateTimer();
-        const interval = setInterval(updateTimer, 60000);
-        return () => clearInterval(interval);
-      }
-    }, [currentSubscription]);
-    useEffect(() => {
+useEffect(() => {
+  // MAIN PLAN TIMER (matches your cron endsAt)
+  if (currentSubscription?.startDate && currentSubscription?.durationDays) {
+    const updateTimer = () => {
+      setTimeLeft(calculateTimeLeft(currentSubscription.startDate, currentSubscription.durationDays));
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000);
+    return () => clearInterval(interval);
+  }
+}, [currentSubscription?.startDate, currentSubscription?.durationDays]);
+
+useEffect(() => {
+  // TRIAL TIMER (shows "0d 0h 0m" from screenshot)
   if (currentSubscription?.trialDays && currentSubscription?.startDate) {
     const updateTrialTimer = () => {
       setTrialDaysLeft(calculateTimeLeft(currentSubscription.startDate, currentSubscription.trialDays));
@@ -144,27 +149,52 @@ const [trialEndDate, setTrialEndDate] = useState(null);
           </div>
 {/* TRIAL INFO CARD */}
 {currentSubscription?.trialDays > 0 && (
-  <div className={`rounded-xl shadow-sm border p-6 mb-8 flex flex-col md:flex-row items-center justify-between transition-colors duration-500 bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200`}>
+  <div className={`rounded-xl shadow-sm border p-6 mb-8 flex flex-col md:flex-row items-center justify-between transition-colors duration-500 ${
+    trialDaysLeft?.expired 
+      ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-200' 
+      : 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200'
+  }`}>
     <div>
-      <h2 className="text-lg font-bold flex items-center gap-2 text-emerald-900">
-        ⏳ Trial Active
+      <h2 className={`text-lg font-bold flex items-center gap-2 ${
+        trialDaysLeft?.expired ? 'text-orange-900' : 'text-emerald-900'
+      }`}>
+        {trialDaysLeft?.expired ? '⚠️ Trial Expired' : '⏳ Trial Active'}
       </h2>
-      <p className="text-sm text-emerald-700 mt-1">
+      <p className="text-sm text-gray-700 mt-1">
         {trialDaysLeft?.days || 0}d {trialDaysLeft?.hours || 0}h {trialDaysLeft?.minutes || 0}m left
       </p>
-      <p className="text-sm text-emerald-700">Started: {new Date(currentSubscription.startDate).toLocaleDateString()}</p>
-      <p className="text-sm text-emerald-700">Ends: <strong>{trialEndDate}</strong></p>
+      <p className="text-sm text-gray-700">Started: {new Date(currentSubscription.startDate).toLocaleDateString()}</p>
+      <p className="text-sm text-gray-700">
+        Ends: <strong>{trialEndDate}</strong>
+      </p>
     </div>
     <div className="mt-4 md:mt-0 flex gap-3 text-center">
-      {[{v: trialDaysLeft?.days || 0, l: 'Days'}, {v: trialDaysLeft?.hours || 0, l: 'Hours'}, {v: trialDaysLeft?.minutes || 0, l: 'Mins'}].map(i => (
-        <div key={i.l} className="bg-white p-3 rounded-lg shadow-sm w-20 border border-emerald-100">
-          <div className="text-2xl font-bold text-emerald-600">{i.v}</div>
-          <div className="text-[10px] uppercase text-emerald-500 font-bold tracking-wider">{i.l}</div>
+      {[
+        {v: trialDaysLeft?.days || 0, l: 'Days'}, 
+        {v: trialDaysLeft?.hours || 0, l: 'Hours'}, 
+        {v: trialDaysLeft?.minutes || 0, l: 'Mins'}
+      ].map(i => (
+        <div key={i.l} className={`p-3 rounded-lg shadow-sm w-20 border ${
+          trialDaysLeft?.expired 
+            ? 'bg-orange-50 border-orange-200' 
+            : 'bg-white border-emerald-100'
+        }`}>
+          <div className={`text-2xl font-bold ${
+            trialDaysLeft?.expired ? 'text-orange-600' : 'text-emerald-600'
+          }`}>
+            {i.v}
+          </div>
+          <div className={`text-[10px] uppercase font-bold tracking-wider ${
+            trialDaysLeft?.expired ? 'text-orange-500' : 'text-emerald-500'
+          }`}>
+            {i.l}
+          </div>
         </div>
       ))}
     </div>
   </div>
 )}
+
 
           {/* TIME REMAINING CARD */}
           {currentPlan && currentSubscription && (

@@ -206,25 +206,36 @@ export default function DoctorCalendarPage() {
                       <p className="text-slate-400 font-bold">No appointments for this date.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {appointments.map(appt => (
-                        <motion.div 
-                          key={appt.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="flex items-center gap-4 p-5 rounded-3xl border border-slate-100 bg-white hover:border-blue-100 hover:shadow-md transition-all group"
-                        >
-                          <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-blue-600 font-black text-xl group-hover:bg-blue-50 transition-colors">
-                            {appt.patientName?.[0]?.toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-slate-800 truncate">{appt.patientName}</h4>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">{formatTo12Hr(appt.timeFormatted)}</p>
-                          </div>
-                          <StatusBadge status={appt.status} />
-                        </motion.div>
-                      ))}
-                    </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {appointments.map((appt) => {
+    // 🔍 The Fix: Access the name from the 'user' object sent by your backend
+    const patientName = appt.user?.name || "Unknown Patient";
+    const patientInitial = patientName[0]?.toUpperCase() || "P";
+    
+    // Format the time from the 'slot' object
+    const displayTime = appt.slot?.time ? formatTo12Hr(appt.slot.time) : "No Time";
+
+    return (
+      <motion.div 
+        key={appt.id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-4 p-5 rounded-3xl border border-slate-100 bg-white hover:border-blue-100 hover:shadow-md transition-all group"
+      >
+        <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-blue-600 font-black text-xl group-hover:bg-blue-50 transition-colors">
+          {patientInitial}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-bold text-slate-800 truncate">{patientName}</h4>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">
+            {displayTime}
+          </p>
+        </div>
+        <StatusBadge status={appt.status} />
+      </motion.div>
+    );
+  })}
+</div>
                   )}
                 </div>
               </div>
